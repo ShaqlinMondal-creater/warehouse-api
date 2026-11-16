@@ -3,9 +3,5 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return response()->json([
-        'ok' => true,
-        'service' => 'warehouse-api',
-        'docs' => url('/api/health'),
-    ]);
+    return view('welcome');
 });
