@@ -80,7 +80,7 @@ PROMPT;
 
         if (! is_string($apiKey) || trim($apiKey) === '') {
             throw new RuntimeException(
-                'No OpenAI token. Paste the API token in Accounts → AI models (or set OPENAI_API_KEY in .env).'
+                'No OpenAI token. Paste the API token in Configs → AI models (or set OPENAI_API_KEY in .env).'
             );
         }
 
@@ -109,7 +109,7 @@ PROMPT;
             ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('OpenAI request failed: '.$response->body());
+            throw new RuntimeException($this->friendlyProviderError('OpenAI', $response->json(), $response->body()));
         }
 
         $content = data_get($response->json(), 'choices.0.message.content');
@@ -128,7 +128,7 @@ PROMPT;
 
         if (! is_string($apiKey) || trim($apiKey) === '') {
             throw new RuntimeException(
-                'No Claude token. Paste the API token in Accounts → AI models (or set ANTHROPIC_API_KEY in .env).'
+                'No Claude token. Paste the API token in Configs → AI models (or set ANTHROPIC_API_KEY in .env).'
             );
         }
 
@@ -168,7 +168,7 @@ PROMPT;
             ]);
 
         if (! $response->successful()) {
-            throw new RuntimeException('Claude request failed: '.$response->body());
+            throw new RuntimeException($this->friendlyProviderError('Claude', $response->json(), $response->body()));
         }
 
         $blocks = data_get($response->json(), 'content', []);
@@ -189,6 +189,47 @@ PROMPT;
         $text = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($text)) ?? $text;
 
         return $text;
+    }
+
+    /**
+     * @param  array<string, mixed>|mixed  $json
+     */
+    private function friendlyProviderError(string $provider, mixed $json, string $rawBody): string
+    {
+        $message = null;
+        $code = null;
+
+        if (is_array($json)) {
+            $message = data_get($json, 'error.message');
+            $code = data_get($json, 'error.code') ?? data_get($json, 'error.type');
+            if (! is_string($message) || $message === '') {
+                $message = data_get($json, 'message');
+            }
+        }
+
+        $text = is_string($message) ? strtolower($message) : '';
+        $codeText = is_string($code) ? strtolower($code) : '';
+
+        if (
+            str_contains($text, 'credit')
+            || str_contains($text, 'quota')
+            || str_contains($text, 'billing')
+            || str_contains($text, 'balance')
+            || str_contains($codeText, 'insufficient')
+            || str_contains($codeText, 'credit')
+        ) {
+            if ($provider === 'Claude') {
+                return 'Claude API has no credits. The Claude desktop/chat app is separate billing. Add API credits at https://console.anthropic.com/settings/billing — or switch Bids to an OpenAI model in Configs → AI models.';
+            }
+
+            return 'OpenAI API has no credits. Add billing at https://platform.openai.com/settings/organization/billing — or switch to another model in Configs → AI models.';
+        }
+
+        if (is_string($message) && $message !== '') {
+            return $provider.' error: '.$message;
+        }
+
+        return $provider.' request failed. Check the API token and model id in Configs → AI models.';
     }
 
     /**
