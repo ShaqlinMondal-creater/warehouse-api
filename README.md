@@ -20,7 +20,7 @@ No seeder — use these endpoints.
 | Portfolio | `GET/POST /work-projects`, `GET/PUT/DELETE /work-projects/{id}` |
 | Bid workspaces | `GET/POST /bid-workspaces`, `GET/PUT/DELETE /bid-workspaces/{id}` |
 | Bids | `GET/POST /bid-workspaces/{id}/bids`, `GET/PUT/DELETE /bids/{id}` |
-| Analytics | `GET /bid-workspaces/{id}/analytics` |
+| Bid metrics | `GET /bid-workspaces/{id}/analytics` (total/active/win rate/avg labels) |
 | Plans | `GET/POST /plans`, `GET/PUT/DELETE /plans/{id}` |
 | Plan items | `POST /plans/{id}/items`, `PUT/DELETE /plan-items/{id}` |
 | Settings | `GET /settings?group=ai`, `PUT /settings` |

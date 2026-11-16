@@ -63,28 +63,59 @@ class BidController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Simple analytics for one workspace */
+    /** Metrics + list stats for one workspace */
     public function analytics(Request $request, BidWorkspace $bidWorkspace): JsonResponse
     {
         $this->authorizeWorkspace($request, $bidWorkspace);
 
-        $bids = $bidWorkspace->bids();
-
-        $total = (clone $bids)->count();
-        $active = (clone $bids)->where('status', 'active')->count();
-        $won = (clone $bids)->where('status', 'won')->count();
-        $avgMyBid = (clone $bids)->whereNotNull('my_bid')->avg('my_bid');
+        $query = $bidWorkspace->bids();
+        $total = (clone $query)->count();
+        $active = (clone $query)->where('status', 'active')->count();
+        $watching = (clone $query)->where('status', 'watching')->count();
+        $won = (clone $query)->where('status', 'won')->count();
+        $lost = (clone $query)->where('status', 'lost')->count();
+        $avgMyBid = (clone $query)->whereNotNull('my_bid')->avg('my_bid');
+        $avgMarket = (clone $query)->whereNotNull('average_bid')->avg('average_bid');
+        $winRate = $total > 0 ? round(($won / $total) * 100, 1) : 0.0;
+        $currency = $bidWorkspace->currency ?: 'INR';
 
         return response()->json([
             'workspace' => $bidWorkspace->only(['id', 'name', 'slug', 'platform', 'currency']),
             'stats' => [
                 'total' => $total,
                 'active' => $active,
+                'watching' => $watching,
                 'won' => $won,
-                'win_rate' => $total > 0 ? round(($won / $total) * 100, 1) : 0,
+                'lost' => $lost,
+                'win_rate' => $winRate,
                 'avg_my_bid' => $avgMyBid !== null ? round((float) $avgMyBid, 2) : null,
+                'avg_market_bid' => $avgMarket !== null ? round((float) $avgMarket, 2) : null,
+                'avg_my_bid_label' => $this->moneyLabel($avgMyBid, $currency),
+                'avg_market_bid_label' => $this->moneyLabel($avgMarket, $currency),
+                'win_rate_label' => rtrim(rtrim(number_format($winRate, 1, '.', ''), '0'), '.').'%',
             ],
         ]);
+    }
+
+    private function moneyLabel(mixed $amount, string $currency): string
+    {
+        if ($amount === null) {
+            return '—';
+        }
+
+        $value = (float) $amount;
+        $symbol = match (strtoupper($currency)) {
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            default => '₹',
+        };
+
+        if ($value >= 1000) {
+            return $symbol.rtrim(rtrim(number_format($value / 1000, 1, '.', ''), '0'), '.').'k';
+        }
+
+        return $symbol.number_format($value, $value == floor($value) ? 0 : 2);
     }
 
     private function validated(Request $request, bool $partial = false): array
