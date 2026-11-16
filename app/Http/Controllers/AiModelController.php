@@ -51,6 +51,11 @@ class AiModelController extends Controller
         $this->authorizeOwner($request, $aiModel);
         $data = $this->validated($request, $aiModel);
 
+        // Empty token on update = keep existing
+        if (array_key_exists('api_token', $data) && (! is_string($data['api_token']) || trim($data['api_token']) === '')) {
+            unset($data['api_token']);
+        }
+
         $item = DB::transaction(function () use ($request, $aiModel, $data) {
             if (array_key_exists('is_default', $data) && $data['is_default']) {
                 $this->clearDefaults($request->user()->id);
@@ -125,6 +130,7 @@ class AiModelController extends Controller
                         ->where('provider', $request->input('provider', $existing?->provider)))
                     ->ignore($existing?->id),
             ],
+            'api_token' => [$existing ? 'nullable' : 'required', 'string', 'max:500'],
             'is_enabled' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
             'expires_at' => ['nullable', 'date'],
@@ -154,6 +160,8 @@ class AiModelController extends Controller
             'label' => $model->label,
             'provider' => $model->provider,
             'model_id' => $model->model_id,
+            'has_api_token' => $model->hasApiToken(),
+            'api_token_masked' => $model->hasApiToken() ? '••••••••••••' : null,
             'is_enabled' => $model->is_enabled,
             'is_default' => $model->is_default,
             'expires_at' => $model->expires_at?->toDateString(),

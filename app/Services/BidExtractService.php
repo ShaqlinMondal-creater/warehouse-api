@@ -43,9 +43,11 @@ class BidExtractService
         $mime = $file->getMimeType() ?: 'image/png';
         $base64 = base64_encode((string) file_get_contents($file->getRealPath()));
 
+        $apiKey = $aiModel?->resolvedApiToken();
+
         $content = match ($provider) {
-            'openai' => $this->callOpenAi($modelId, $mime, $base64),
-            'claude' => $this->callClaude($modelId, $mime, $base64),
+            'openai' => $this->callOpenAi($modelId, $mime, $base64, $apiKey),
+            'claude' => $this->callClaude($modelId, $mime, $base64, $apiKey),
             default => throw new RuntimeException('Unsupported AI provider: '.$provider),
         };
 
@@ -70,12 +72,15 @@ Rules:
 PROMPT;
     }
 
-    private function callOpenAi(string $model, string $mime, string $base64): string
+    private function callOpenAi(string $model, string $mime, string $base64, ?string $apiKey = null): string
     {
-        $apiKey = config('services.openai.api_key');
+        $apiKey = is_string($apiKey) && trim($apiKey) !== ''
+            ? trim($apiKey)
+            : config('services.openai.api_key');
+
         if (! is_string($apiKey) || trim($apiKey) === '') {
             throw new RuntimeException(
-                'OPENAI_API_KEY is not set on the API server .env. Add it, then run: php artisan config:clear'
+                'No OpenAI token. Paste the API token in Accounts → AI models (or set OPENAI_API_KEY in .env).'
             );
         }
 
@@ -115,12 +120,15 @@ PROMPT;
         return $content;
     }
 
-    private function callClaude(string $model, string $mime, string $base64): string
+    private function callClaude(string $model, string $mime, string $base64, ?string $apiKey = null): string
     {
-        $apiKey = config('services.anthropic.api_key');
+        $apiKey = is_string($apiKey) && trim($apiKey) !== ''
+            ? trim($apiKey)
+            : config('services.anthropic.api_key');
+
         if (! is_string($apiKey) || trim($apiKey) === '') {
             throw new RuntimeException(
-                'ANTHROPIC_API_KEY is not set on the API server .env. Add it, then run: php artisan config:clear'
+                'No Claude token. Paste the API token in Accounts → AI models (or set ANTHROPIC_API_KEY in .env).'
             );
         }
 
