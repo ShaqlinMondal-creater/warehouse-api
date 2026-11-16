@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BidController;
+use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
@@ -29,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('bid-workspaces/{bidWorkspace}/bids', [BidController::class, 'index']);
     Route::post('bid-workspaces/{bidWorkspace}/bids', [BidController::class, 'store']);
+    Route::post('bid-workspaces/{bidWorkspace}/extract', [BidExtractController::class, 'extract']);
+    Route::post('bid-workspaces/{bidWorkspace}/import', [BidExtractController::class, 'import']);
     Route::get('bid-workspaces/{bidWorkspace}/analytics', [BidController::class, 'analytics']);
     Route::get('bids/{bid}', [BidController::class, 'show']);
     Route::put('bids/{bid}', [BidController::class, 'update']);
