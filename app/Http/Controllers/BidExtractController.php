@@ -2,27 +2,31 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiModel;
 use App\Models\Bid;
 use App\Models\BidWorkspace;
-use App\Services\OpenAiBidExtractService;
+use App\Services\BidExtractService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
 
 class BidExtractController extends Controller
 {
-    public function extract(Request $request, BidWorkspace $bidWorkspace, OpenAiBidExtractService $extractor): JsonResponse
+    public function extract(Request $request, BidWorkspace $bidWorkspace, BidExtractService $extractor): JsonResponse
     {
         $this->authorizeWorkspace($request, $bidWorkspace);
 
         $data = $request->validate([
             'image' => ['required', 'file', 'image', 'max:8192'],
+            'ai_model_id' => ['nullable', 'integer'],
         ]);
+
+        $aiModel = $this->resolveAiModel($request, isset($data['ai_model_id']) ? (int) $data['ai_model_id'] : null);
 
         try {
             /** @var \Illuminate\Http\UploadedFile $image */
             $image = $data['image'];
-            $bids = $extractor->extractFromImage($image);
+            $bids = $extractor->extractFromImage($image, $aiModel);
         } catch (Throwable $e) {
             return response()->json([
                 'ok' => false,
@@ -33,6 +37,12 @@ class BidExtractController extends Controller
         return response()->json([
             'ok' => true,
             'workspace_id' => $bidWorkspace->id,
+            'ai_model' => $aiModel ? [
+                'id' => $aiModel->id,
+                'label' => $aiModel->label,
+                'provider' => $aiModel->provider,
+                'model_id' => $aiModel->model_id,
+            ] : null,
             'extracted' => count($bids),
             'bids' => $bids,
         ]);
@@ -98,6 +108,24 @@ class BidExtractController extends Controller
             'updated' => $updated,
             'data' => $saved,
         ]);
+    }
+
+    private function resolveAiModel(Request $request, ?int $aiModelId): ?AiModel
+    {
+        $query = AiModel::query()->where('user_id', $request->user()->id);
+
+        if ($aiModelId) {
+            $model = (clone $query)->whereKey($aiModelId)->first();
+            abort_unless($model !== null, 404, 'AI model not found.');
+
+            return $model;
+        }
+
+        return $query
+            ->where('is_default', true)
+            ->where('is_enabled', true)
+            ->first()
+            ?? $query->where('is_enabled', true)->orderBy('sort_order')->first();
     }
 
     private function authorizeWorkspace(Request $request, BidWorkspace $workspace): void

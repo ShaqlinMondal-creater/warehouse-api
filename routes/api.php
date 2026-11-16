@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AiModelController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\BidExtractController;
@@ -46,4 +47,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('settings', [SettingController::class, 'index']);
     Route::put('settings', [SettingController::class, 'upsert']);
+
+    Route::get('ai-models', [AiModelController::class, 'index']);
+    Route::post('ai-models', [AiModelController::class, 'store']);
+    Route::put('ai-models/{aiModel}', [AiModelController::class, 'update']);
+    Route::patch('ai-models/{aiModel}', [AiModelController::class, 'update']);
+    Route::delete('ai-models/{aiModel}', [AiModelController::class, 'destroy']);
+    Route::post('ai-models/{aiModel}/default', [AiModelController::class, 'setDefault']);
 });

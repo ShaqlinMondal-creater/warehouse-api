@@ -40,4 +40,8 @@ return [
         'organization' => env('OPENAI_ORGANIZATION'),
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+    ],
+
 ];
