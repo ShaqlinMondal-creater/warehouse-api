@@ -1,50 +1,27 @@
 # warehouse-api
 
-Laravel API for **Shaqlin Warehouse** — portfolio, bids (Freelancer / Upwork / other), planning, and AI/app config.
+Laravel API only (no Laravel frontend). React app lives in a separate repo/folder.
 
-## Quick start
+Base URL: `https://api.warehouse.liwaas.com`
 
-```bash
-cd warehouse-api
-composer install
-cp .env.example .env   # if needed
-php artisan key:generate
-php artisan migrate --seed
-php artisan serve
-```
+## Endpoints (current)
 
-API base: `http://127.0.0.1:8000/api`
+- `GET /` — service ping  
+- `GET /api/health`  
+- `POST /api/login`  
+- `GET /api/me` · `POST /api/logout` · `GET /api/overview` (auth)
 
-### Demo login (from seeder)
+No database seeder — create data via API.
 
-- Email: `demo@shaqlin.warehouse`
-- Password: `demo1234`
-
-### Try
+## Deploy / update on cPanel
 
 ```bash
-curl http://127.0.0.1:8000/api/health
-curl -X POST http://127.0.0.1:8000/api/login -H "Content-Type: application/json" -d "{\"email\":\"demo@shaqlin.warehouse\",\"password\":\"demo1234\"}"
+cd ~/api.warehouse.liwaas.com
+git pull
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
 ```
 
-## Tables
-
-| Table | Module |
-|-------|--------|
-| users | Auth |
-| work_projects | Previous / portfolio projects |
-| bid_workspaces | Freelancer, Upwork, Other |
-| bids | Bid rows per workspace |
-| plans / plan_items | Future planning + progress |
-| settings | AI + app config (secrets masked) |
-| personal_access_tokens | Sanctum |
-
-## Config
-
-- `config/warehouse.php` — AI/app defaults  
-- `.env` — `OPENAI_API_KEY`, `WAREHOUSE_AI_*` (optional; AI off by default)
-
-## Next
-
-CRUD controllers for portfolio, bids, plans, settings; wire React login to Sanctum.
-"# warehouse-api" 
+Document root must be: `.../api.warehouse.liwaas.com/public`
