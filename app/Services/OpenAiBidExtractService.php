@@ -23,9 +23,11 @@ class OpenAiBidExtractService
      */
     public function extractFromImage(UploadedFile $file): array
     {
-        $apiKey = env('OPENAI_API_KEY');
+        $apiKey = config('services.openai.api_key');
         if (! is_string($apiKey) || trim($apiKey) === '') {
-            throw new RuntimeException('OPENAI_API_KEY is not set on the server.');
+            throw new RuntimeException(
+                'OPENAI_API_KEY is not set on the API server .env (api.warehouse.liwaas.com). Add it there, set WAREHOUSE_AI_ENABLED=true, then run: php artisan config:clear'
+            );
         }
 
         if (! config('warehouse.ai.enabled', false)) {
