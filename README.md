@@ -9,7 +9,6 @@ No seeder — use these endpoints.
 
 | Method | Path | Body |
 |--------|------|------|
-| POST | `/register` | `name`, `email`, `password`, `password_confirmation` |
 | POST | `/login` | `email`, `password` |
 | GET | `/me` | Bearer token |
 | POST | `/logout` | Bearer token |
@@ -26,14 +25,6 @@ No seeder — use these endpoints.
 | Plan items | `POST /plans/{id}/items`, `PUT/DELETE /plan-items/{id}` |
 | Settings | `GET /settings?group=ai`, `PUT /settings` |
 | Overview | `GET /overview` |
-
-### Register example
-
-```bash
-curl -X POST https://api.warehouse.liwaas.com/api/register \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"Shaqlin\",\"email\":\"you@email.com\",\"password\":\"secret12\",\"password_confirmation\":\"secret12\"}"
-```
 
 ### Update on cPanel after git push
 
