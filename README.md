@@ -1,27 +1,47 @@
 # warehouse-api
 
-Laravel API only (no Laravel frontend). React app lives in a separate repo/folder.
+Laravel API for Shaqlin Warehouse.  
+Base: `https://api.warehouse.liwaas.com/api`
 
-Base URL: `https://api.warehouse.liwaas.com`
+No seeder — use these endpoints.
 
-## Endpoints (current)
+## Auth
 
-- `GET /` — service ping  
-- `GET /api/health`  
-- `POST /api/login`  
-- `GET /api/me` · `POST /api/logout` · `GET /api/overview` (auth)
+| Method | Path | Body |
+|--------|------|------|
+| POST | `/register` | `name`, `email`, `password`, `password_confirmation` |
+| POST | `/login` | `email`, `password` |
+| GET | `/me` | Bearer token |
+| POST | `/logout` | Bearer token |
 
-No database seeder — create data via API.
+## Modules (Bearer token required)
 
-## Deploy / update on cPanel
+| Resource | Paths |
+|----------|--------|
+| Portfolio | `GET/POST /work-projects`, `GET/PUT/DELETE /work-projects/{id}` |
+| Bid workspaces | `GET/POST /bid-workspaces`, `GET/PUT/DELETE /bid-workspaces/{id}` |
+| Bids | `GET/POST /bid-workspaces/{id}/bids`, `GET/PUT/DELETE /bids/{id}` |
+| Analytics | `GET /bid-workspaces/{id}/analytics` |
+| Plans | `GET/POST /plans`, `GET/PUT/DELETE /plans/{id}` |
+| Plan items | `POST /plans/{id}/items`, `PUT/DELETE /plan-items/{id}` |
+| Settings | `GET /settings?group=ai`, `PUT /settings` |
+| Overview | `GET /overview` |
+
+### Register example
+
+```bash
+curl -X POST https://api.warehouse.liwaas.com/api/register \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Shaqlin\",\"email\":\"you@email.com\",\"password\":\"secret12\",\"password_confirmation\":\"secret12\"}"
+```
+
+### Update on cPanel after git push
 
 ```bash
 cd ~/api.warehouse.liwaas.com
 git pull
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
-php artisan config:cache
 php artisan route:cache
+php artisan config:cache
 ```
-
-Document root must be: `.../api.warehouse.liwaas.com/public`
