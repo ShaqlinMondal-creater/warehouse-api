@@ -34,6 +34,23 @@ class BidExtractController extends Controller
             ], 422);
         }
 
+        $existingByName = Bid::query()
+            ->where('bid_workspace_id', $bidWorkspace->id)
+            ->whereIn('project_name', collect($bids)->pluck('project_name')->filter()->all())
+            ->get()
+            ->keyBy('project_name');
+
+        $enriched = [];
+        foreach ($bids as $row) {
+            $existing = $existingByName->get($row['project_name'] ?? '');
+            $same = $existing ? $this->isSameBid($existing, $row) : false;
+            $enriched[] = array_merge($row, [
+                'already_exists' => $existing !== null,
+                'same_as_saved' => $same,
+                'suggested_save' => ! $same,
+            ]);
+        }
+
         return response()->json([
             'ok' => true,
             'workspace_id' => $bidWorkspace->id,
@@ -43,8 +60,9 @@ class BidExtractController extends Controller
                 'provider' => $aiModel->provider,
                 'model_id' => $aiModel->model_id,
             ] : null,
-            'extracted' => count($bids),
-            'bids' => $bids,
+            'extracted' => count($enriched),
+            'already_same' => collect($enriched)->where('same_as_saved', true)->count(),
+            'bids' => $enriched,
         ]);
     }
 
@@ -56,6 +74,8 @@ class BidExtractController extends Controller
             'bids' => ['required', 'array', 'min:1'],
             'bids.*.project_name' => ['required', 'string', 'max:255'],
             'bids.*.total_bids' => ['nullable', 'integer', 'min:0'],
+            'bids.*.my_rank' => ['nullable', 'integer', 'min:1'],
+            'bids.*.client_viewed' => ['nullable', 'boolean'],
             'bids.*.average_bid' => ['nullable', 'numeric'],
             'bids.*.average_bid_raw' => ['nullable', 'string', 'max:80'],
             'bids.*.my_bid' => ['nullable', 'numeric'],
@@ -67,13 +87,21 @@ class BidExtractController extends Controller
 
         $added = 0;
         $updated = 0;
+        $skipped = 0;
         $saved = [];
 
         foreach ($payload['bids'] as $row) {
             $existing = Bid::query()
                 ->where('bid_workspace_id', $bidWorkspace->id)
                 ->where('project_name', $row['project_name'])
-                ->exists();
+                ->first();
+
+            if ($existing && $this->isSameBid($existing, $row)) {
+                $skipped++;
+                $saved[] = $existing;
+
+                continue;
+            }
 
             $bid = Bid::query()->updateOrCreate(
                 [
@@ -82,6 +110,8 @@ class BidExtractController extends Controller
                 ],
                 [
                     'total_bids' => $row['total_bids'] ?? null,
+                    'my_rank' => $row['my_rank'] ?? null,
+                    'client_viewed' => array_key_exists('client_viewed', $row) ? $row['client_viewed'] : null,
                     'average_bid' => $row['average_bid'] ?? null,
                     'average_bid_raw' => $row['average_bid_raw'] ?? null,
                     'my_bid' => $row['my_bid'] ?? null,
@@ -106,8 +136,49 @@ class BidExtractController extends Controller
             'ok' => true,
             'added' => $added,
             'updated' => $updated,
+            'skipped' => $skipped,
             'data' => $saved,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function isSameBid(Bid $existing, array $row): bool
+    {
+        $sameNumber = function ($a, $b): bool {
+            if ($a === null && ($b === null || $b === '')) {
+                return true;
+            }
+            if ($a === null || $b === null || $b === '') {
+                return false;
+            }
+
+            return abs((float) $a - (float) $b) < 0.001;
+        };
+
+        $sameInt = function ($a, $b): bool {
+            if ($a === null && ($b === null || $b === '')) {
+                return true;
+            }
+            if ($a === null || $b === null || $b === '') {
+                return false;
+            }
+
+            return (int) $a === (int) $b;
+        };
+
+        $incomingViewed = array_key_exists('client_viewed', $row) ? $row['client_viewed'] : null;
+        $existingViewed = $existing->client_viewed;
+        $sameViewed = $existingViewed === null && $incomingViewed === null
+            ? true
+            : ($existingViewed !== null && $incomingViewed !== null && (bool) $existingViewed === (bool) $incomingViewed);
+
+        return $sameInt($existing->total_bids, $row['total_bids'] ?? null)
+            && $sameInt($existing->my_rank, $row['my_rank'] ?? null)
+            && $sameNumber($existing->my_bid, $row['my_bid'] ?? null)
+            && $sameNumber($existing->average_bid, $row['average_bid'] ?? null)
+            && $sameViewed;
     }
 
     private function resolveAiModel(Request $request, ?int $aiModelId): ?AiModel

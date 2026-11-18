@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'my_bid_raw',
     'bid_type',
     'my_rank',
+    'client_viewed',
     'status',
     'chatting',
     'bid_placed_at',
@@ -33,6 +34,7 @@ class Bid extends Model
         return [
             'average_bid' => 'decimal:2',
             'my_bid' => 'decimal:2',
+            'client_viewed' => 'boolean',
             'bid_placed_at' => 'datetime',
             'last_synced_at' => 'datetime',
             'meta' => 'array',
