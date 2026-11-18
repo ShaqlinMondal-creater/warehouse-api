@@ -44,4 +44,11 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'http_referer' => env('OPENROUTER_HTTP_REFERER', 'https://warehouse.liwaas.com'),
+        'app_title' => env('OPENROUTER_APP_TITLE', 'Shaqlin Warehouse'),
+    ],
+
 ];

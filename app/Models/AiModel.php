@@ -53,6 +53,7 @@ class AiModel extends Model
         return match ($this->provider) {
             'openai' => $this->nullableEnv(config('services.openai.api_key')),
             'claude' => $this->nullableEnv(config('services.anthropic.api_key')),
+            'openrouter' => $this->nullableEnv(config('services.openrouter.api_key')),
             default => null,
         };
     }

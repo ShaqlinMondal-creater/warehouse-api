@@ -26,6 +26,7 @@ class AiModelController extends Controller
             'providers' => [
                 ['id' => 'openai', 'label' => 'OpenAI', 'env_key' => 'OPENAI_API_KEY'],
                 ['id' => 'claude', 'label' => 'Claude (Anthropic)', 'env_key' => 'ANTHROPIC_API_KEY'],
+                ['id' => 'openrouter', 'label' => 'OpenRouter (free models OK)', 'env_key' => 'OPENROUTER_API_KEY'],
             ],
         ]);
     }
@@ -119,11 +120,11 @@ class AiModelController extends Controller
 
         return $request->validate([
             'label' => [$existing ? 'sometimes' : 'required', 'string', 'max:80'],
-            'provider' => [$existing ? 'sometimes' : 'required', 'in:openai,claude'],
+            'provider' => [$existing ? 'sometimes' : 'required', 'in:openai,claude,openrouter'],
             'model_id' => [
                 $existing ? 'sometimes' : 'required',
                 'string',
-                'max:120',
+                'max:160',
                 Rule::unique('ai_models', 'model_id')
                     ->where(fn ($q) => $q
                         ->where('user_id', $userId)

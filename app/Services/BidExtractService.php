@@ -36,7 +36,7 @@ class BidExtractService
                 throw new RuntimeException('Selected AI model is disabled.');
             }
             if ($aiModel->isExpired()) {
-                throw new RuntimeException('Selected AI model expired on '.$aiModel->expires_at?->toDateString().'. Update the expire date in Accounts → AI models.');
+                throw new RuntimeException('Selected AI model expired on '.$aiModel->expires_at?->toDateString().'. Update the expire date in Configs → AI models.');
             }
         }
 
@@ -48,6 +48,7 @@ class BidExtractService
         $content = match ($provider) {
             'openai' => $this->callOpenAi($modelId, $mime, $base64, $apiKey),
             'claude' => $this->callClaude($modelId, $mime, $base64, $apiKey),
+            'openrouter' => $this->callOpenRouter($modelId, $mime, $base64, $apiKey),
             default => throw new RuntimeException('Unsupported AI provider: '.$provider),
         };
 
@@ -116,6 +117,70 @@ PROMPT;
         if (! is_string($content) || trim($content) === '') {
             throw new RuntimeException('OpenAI returned empty content.');
         }
+
+        return $content;
+    }
+
+    private function callOpenRouter(string $model, string $mime, string $base64, ?string $apiKey = null): string
+    {
+        $apiKey = is_string($apiKey) && trim($apiKey) !== ''
+            ? trim($apiKey)
+            : config('services.openrouter.api_key');
+
+        if (! is_string($apiKey) || trim($apiKey) === '') {
+            throw new RuntimeException(
+                'No OpenRouter token. Paste sk-or-v1-... in Configs → AI models (or set OPENROUTER_API_KEY in .env).'
+            );
+        }
+
+        $baseUrl = rtrim((string) config('services.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
+        $dataUrl = 'data:'.$mime.';base64,'.$base64;
+
+        $response = Http::withToken($apiKey)
+            ->withHeaders([
+                'HTTP-Referer' => (string) config('services.openrouter.http_referer', 'https://warehouse.liwaas.com'),
+                'X-Title' => (string) config('services.openrouter.app_title', 'Shaqlin Warehouse'),
+            ])
+            ->timeout(120)
+            ->post($baseUrl.'/chat/completions', [
+                'model' => $model,
+                'temperature' => 0,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You extract bid table rows from screenshots. Reply with JSON only.',
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            ['type' => 'text', 'text' => $this->prompt()],
+                            ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
+                        ],
+                    ],
+                ],
+                'max_tokens' => (int) config('warehouse.ai.max_tokens', 2000),
+            ]);
+
+        if (! $response->successful()) {
+            throw new RuntimeException($this->friendlyProviderError('OpenRouter', $response->json(), $response->body()));
+        }
+
+        $content = data_get($response->json(), 'choices.0.message.content');
+        if (is_array($content)) {
+            $text = '';
+            foreach ($content as $part) {
+                if (is_array($part) && isset($part['text'])) {
+                    $text .= (string) $part['text'];
+                }
+            }
+            $content = $text;
+        }
+
+        if (! is_string($content) || trim($content) === '') {
+            throw new RuntimeException('OpenRouter returned empty content.');
+        }
+
+        $content = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($content)) ?? trim($content);
 
         return $content;
     }
@@ -219,10 +284,18 @@ PROMPT;
             || str_contains($codeText, 'credit')
         ) {
             if ($provider === 'Claude') {
-                return 'Claude API has no credits. The Claude desktop/chat app is separate billing. Add API credits at https://console.anthropic.com/settings/billing — or switch Bids to an OpenAI model in Configs → AI models.';
+                return 'Claude API has no credits. The Claude desktop/chat app is separate billing. Add API credits at https://console.anthropic.com/settings/billing — or switch Bids to OpenRouter free / OpenAI in Configs → AI models.';
             }
 
-            return 'OpenAI API has no credits. Add billing at https://platform.openai.com/settings/organization/billing — or switch to another model in Configs → AI models.';
+            if ($provider === 'OpenRouter') {
+                return 'OpenRouter needs credits for this model, or the free model is rate-limited. Use a model id ending in :free (e.g. nvidia/nemotron-3.5-super-vl:free), wait and retry, or add credits at https://openrouter.ai/settings/credits';
+            }
+
+            return 'OpenAI API has no credits. Add billing at https://platform.openai.com/settings/organization/billing — or switch to OpenRouter free in Configs → AI models.';
+        }
+
+        if ($provider === 'OpenRouter' && (str_contains($text, 'rate') || str_contains($codeText, '429'))) {
+            return 'OpenRouter free model rate limit hit. Wait a minute and try again, or use another :free model.';
         }
 
         if (is_string($message) && $message !== '') {
