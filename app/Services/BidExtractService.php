@@ -13,7 +13,7 @@ class BidExtractService
      * @return list<array{
      *   project_name: string,
      *   total_bids: int|null,
-     *   my_rank: int|null,
+     *   my_rank: string|null,
      *   client_viewed: bool|null,
      *   average_bid_raw: string|null,
      *   average_bid: float|null,
@@ -66,8 +66,8 @@ Return ONLY valid JSON (no markdown, no thinking) as: {"bids":[...]}
 Each object keys:
 - project_name (string) — Project column (full visible title)
 - total_bids (integer or null) — from "Total Bids" OR from Bid Rank "of N bids"
-- my_rank (integer or null) — from Bid Rank like "#96 of 111 bids" → 96; "#100+" → 100; else null
-- client_viewed (boolean or null) — true if Actions Taken shows client viewed (eye filled/active); false if clearly not; null if unknown
+- my_rank (string or null) — from Bid Rank like "#96 of 111 bids" → "96"; "#100+" → "100+" (keep the plus); else null
+- client_viewed — always false (do not try to detect viewed from icons)
 - average_bid_raw (string or null) — Average Bid cell if present
 - my_bid_raw (string or null) — "My Bid" OR "Your Bid" cell exactly as shown (e.g. "₹20,000.00 INR")
 - bid_placed_raw (string or null) — "Bid Placed" relative time OR "Time to bid" text if that is what the table shows
@@ -422,8 +422,8 @@ PROMPT;
             $placedRaw = $this->nullableString($row['bid_placed_raw'] ?? null);
             $rankRaw = $this->nullableString($row['bid_rank_raw'] ?? null);
             $totalBids = $this->nullableInt($row['total_bids'] ?? null);
-            $myRank = $this->nullableInt($row['my_rank'] ?? null)
-                ?? $this->parseRank($rankRaw);
+            $myRank = $this->parseRankLabel($row['my_rank'] ?? null)
+                ?? $this->parseRankLabel($rankRaw);
 
             if ($totalBids === null && $rankRaw !== null) {
                 $totalBids = $this->parseTotalFromRankRaw($rankRaw);
@@ -433,7 +433,7 @@ PROMPT;
                 'project_name' => $project,
                 'total_bids' => $totalBids,
                 'my_rank' => $myRank,
-                'client_viewed' => $this->nullableBool($row['client_viewed'] ?? null),
+                'client_viewed' => false,
                 'average_bid_raw' => $avgRaw,
                 'average_bid' => $this->parseMoney($avgRaw),
                 'my_bid_raw' => $myRaw,
@@ -499,14 +499,24 @@ PROMPT;
         return null;
     }
 
-    /** Parse "#93 of 107 bids" or "#100+" → 93 / 100. */
-    private function parseRank(?string $raw): ?int
+    /** Parse "#93 of 107 bids" → "93"; "#100+" → "100+". */
+    private function parseRankLabel(mixed $raw): ?string
     {
-        if ($raw === null) {
+        if ($raw === null || $raw === '') {
             return null;
         }
-        if (preg_match('/#\s*(\d+)/', $raw, $m)) {
-            return (int) $m[1];
+        $text = trim((string) $raw);
+        if (preg_match('/#\s*(\d+\+)/', $text, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/#\s*(\d+)/', $text, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/^(\d+\+)$/', $text, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/^(\d+)$/', $text, $m)) {
+            return $m[1];
         }
 
         return null;

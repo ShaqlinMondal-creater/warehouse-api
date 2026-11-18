@@ -74,7 +74,7 @@ class BidExtractController extends Controller
             'bids' => ['required', 'array', 'min:1'],
             'bids.*.project_name' => ['required', 'string', 'max:255'],
             'bids.*.total_bids' => ['nullable', 'integer', 'min:0'],
-            'bids.*.my_rank' => ['nullable', 'integer', 'min:1'],
+            'bids.*.my_rank' => ['nullable', 'string', 'max:20'],
             'bids.*.client_viewed' => ['nullable', 'boolean'],
             'bids.*.average_bid' => ['nullable', 'numeric'],
             'bids.*.average_bid_raw' => ['nullable', 'string', 'max:80'],
@@ -111,7 +111,9 @@ class BidExtractController extends Controller
                 [
                     'total_bids' => $row['total_bids'] ?? null,
                     'my_rank' => $row['my_rank'] ?? null,
-                    'client_viewed' => array_key_exists('client_viewed', $row) ? $row['client_viewed'] : null,
+                    'client_viewed' => array_key_exists('client_viewed', $row)
+                        ? (bool) $row['client_viewed']
+                        : false,
                     'average_bid' => $row['average_bid'] ?? null,
                     'average_bid_raw' => $row['average_bid_raw'] ?? null,
                     'my_bid' => $row['my_bid'] ?? null,
@@ -168,17 +170,21 @@ class BidExtractController extends Controller
             return (int) $a === (int) $b;
         };
 
-        $incomingViewed = array_key_exists('client_viewed', $row) ? $row['client_viewed'] : null;
-        $existingViewed = $existing->client_viewed;
-        $sameViewed = $existingViewed === null && $incomingViewed === null
-            ? true
-            : ($existingViewed !== null && $incomingViewed !== null && (bool) $existingViewed === (bool) $incomingViewed);
+        $sameRank = function ($a, $b): bool {
+            $left = $a === null || $a === '' ? null : (string) $a;
+            $right = $b === null || $b === '' ? null : (string) $b;
+
+            return $left === $right;
+        };
+
+        $incomingViewed = array_key_exists('client_viewed', $row) ? $row['client_viewed'] : false;
+        $existingViewed = $existing->client_viewed ?? false;
 
         return $sameInt($existing->total_bids, $row['total_bids'] ?? null)
-            && $sameInt($existing->my_rank, $row['my_rank'] ?? null)
+            && $sameRank($existing->my_rank, $row['my_rank'] ?? null)
             && $sameNumber($existing->my_bid, $row['my_bid'] ?? null)
             && $sameNumber($existing->average_bid, $row['average_bid'] ?? null)
-            && $sameViewed;
+            && (bool) $existingViewed === (bool) $incomingViewed;
     }
 
     private function resolveAiModel(Request $request, ?int $aiModelId): ?AiModel
