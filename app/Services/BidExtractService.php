@@ -60,23 +60,25 @@ class BidExtractService
     private function prompt(): string
     {
         return <<<'PROMPT'
-You read a Freelancer (or similar) "Bids" table screenshot.
-Return ONLY valid JSON (no markdown) as an object: {"bids":[...]} with objects keys:
-- project_name (string)
-- total_bids (integer or null)
-- my_rank (integer or null) — your bid rank when shown (e.g. from "#93 of 107 bids" → 93; from "#100+" → 100). If rank is not on the screenshot, null.
-- client_viewed (boolean or null) — true if the client has viewed your bid (eye / viewed indicator in Actions). false if clearly not viewed. null if unknown / not shown.
-- average_bid_raw (string exactly as shown, or null)
-- my_bid_raw (string exactly as shown, or null)
-- bid_placed_raw (string exactly as shown, e.g. "about 5 hours ago", or null)
-- bid_rank_raw (string exactly as shown for Bid Rank column if present, e.g. "#93 of 107 bids", or null)
+You read a Freelancer (or similar) bids screenshot table.
+Return ONLY valid JSON (no markdown, no thinking) as: {"bids":[...]}
+
+Each object keys:
+- project_name (string) — Project column (full visible title)
+- total_bids (integer or null) — from "Total Bids" OR from Bid Rank "of N bids"
+- my_rank (integer or null) — from Bid Rank like "#96 of 111 bids" → 96; "#100+" → 100; else null
+- client_viewed (boolean or null) — true if Actions Taken shows client viewed (eye filled/active); false if clearly not; null if unknown
+- average_bid_raw (string or null) — Average Bid cell if present
+- my_bid_raw (string or null) — "My Bid" OR "Your Bid" cell exactly as shown (e.g. "₹20,000.00 INR")
+- bid_placed_raw (string or null) — "Bid Placed" relative time OR "Time to bid" text if that is what the table shows
+- bid_rank_raw (string or null) — full Bid Rank text e.g. "#96 of 111 bids"
+- bid_type (string or null) — "hourly" if my/your bid contains "/ hour", else "fixed"
 
 Rules:
-- One object per project row.
-- Keep currency text in *_raw fields.
-- If a cell is missing, use null.
-- Screenshots may be either a simple Bids list (no rank) or a Bid Rank view ("#N of X bids"). Extract my_rank when possible.
-- For client_viewed, look for viewed/eye indicators in Actions Taken. If the column is absent, use null.
+- One object per visible project row.
+- Keep currency symbols/text in *_raw fields.
+- Missing cells → null.
+- Support both table styles: (1) Project / Total Bids / Average Bid / My Bid / Bid Placed (2) Project / Time to bid / Bid Rank / Your Bid / Actions Taken.
 PROMPT;
     }
 
@@ -142,54 +144,132 @@ PROMPT;
 
         $baseUrl = rtrim((string) config('services.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
         $dataUrl = 'data:'.$mime.';base64,'.$base64;
+        $maxTokens = max((int) config('warehouse.ai.max_tokens', 2000), 4096);
 
-        $response = Http::withToken($apiKey)
-            ->withHeaders([
-                'HTTP-Referer' => (string) config('services.openrouter.http_referer', 'https://warehouse.liwaas.com'),
-                'X-Title' => (string) config('services.openrouter.app_title', 'Shaqlin Warehouse'),
-            ])
-            ->timeout(120)
-            ->post($baseUrl.'/chat/completions', [
-                'model' => $model,
-                'temperature' => 0,
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => 'You extract bid table rows from screenshots. Reply with JSON only.',
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $this->prompt()],
-                            ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
-                        ],
+        $payload = [
+            'model' => $model,
+            'temperature' => 0,
+            // Nemotron free often spends all tokens on reasoning → empty content.
+            'reasoning' => [
+                'enabled' => false,
+                'exclude' => true,
+            ],
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You extract Freelancer bid table rows from screenshots. Reply with JSON only. No markdown. No thinking.',
+                ],
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
+                        ['type' => 'text', 'text' => $this->prompt()],
                     ],
                 ],
-                'max_tokens' => (int) config('warehouse.ai.max_tokens', 2000),
-            ]);
+            ],
+            'max_tokens' => $maxTokens,
+        ];
 
-        if (! $response->successful()) {
-            throw new RuntimeException($this->friendlyProviderError('OpenRouter', $response->json(), $response->body()));
-        }
+        $content = null;
+        $lastJson = null;
+        $attempts = 0;
 
-        $content = data_get($response->json(), 'choices.0.message.content');
-        if (is_array($content)) {
-            $text = '';
-            foreach ($content as $part) {
-                if (is_array($part) && isset($part['text'])) {
-                    $text .= (string) $part['text'];
-                }
+        while ($attempts < 2) {
+            $attempts++;
+            $response = Http::withToken($apiKey)
+                ->withHeaders([
+                    'HTTP-Referer' => (string) config('services.openrouter.http_referer', 'https://warehouse.liwaas.com'),
+                    'X-Title' => (string) config('services.openrouter.app_title', 'Shaqlin Warehouse'),
+                ])
+                ->timeout(120)
+                ->post($baseUrl.'/chat/completions', $payload);
+
+            if (! $response->successful()) {
+                throw new RuntimeException($this->friendlyProviderError('OpenRouter', $response->json(), $response->body()));
             }
-            $content = $text;
+
+            $lastJson = $response->json();
+            $content = $this->extractOpenRouterText($lastJson);
+            if (is_string($content) && trim($content) !== '') {
+                break;
+            }
+
+            // Second try: more tokens, still no reasoning.
+            $payload['max_tokens'] = max($maxTokens, 8192);
+            $payload['reasoning'] = ['enabled' => false, 'exclude' => true];
         }
 
         if (! is_string($content) || trim($content) === '') {
-            throw new RuntimeException('OpenRouter returned empty content.');
+            $finish = (string) data_get($lastJson, 'choices.0.finish_reason', 'unknown');
+            $usage = data_get($lastJson, 'usage.completion_tokens', '?');
+
+            throw new RuntimeException(
+                'OpenRouter returned empty content (finish='.$finish.', completion_tokens='.$usage.'). '
+                .'Free Nemotron often fails under load — wait 30–60s and retry, or switch model to openrouter/free or google/gemini-2.0-flash-exp:free in Configs → AI models.'
+            );
         }
 
-        $content = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($content)) ?? trim($content);
+        return preg_replace('/^```(?:json)?\s*|\s*```$/m', '', trim($content)) ?? trim($content);
+    }
 
-        return $content;
+    /**
+     * @param  array<string, mixed>|mixed  $json
+     */
+    private function extractOpenRouterText(mixed $json): ?string
+    {
+        if (! is_array($json)) {
+            return null;
+        }
+
+        $message = data_get($json, 'choices.0.message');
+        if (! is_array($message)) {
+            return null;
+        }
+
+        $candidates = [
+            $message['content'] ?? null,
+            $message['reasoning'] ?? null,
+            data_get($message, 'reasoning_details.0.text'),
+            data_get($message, 'reasoning_details.0.summary'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $text = $this->stringifyModelContent($candidate);
+            if ($text !== null && trim($text) !== '') {
+                return $text;
+            }
+        }
+
+        return null;
+    }
+
+    private function stringifyModelContent(mixed $content): ?string
+    {
+        if (is_string($content)) {
+            return $content;
+        }
+
+        if (! is_array($content)) {
+            return null;
+        }
+
+        $text = '';
+        foreach ($content as $part) {
+            if (is_string($part)) {
+                $text .= $part;
+                continue;
+            }
+            if (! is_array($part)) {
+                continue;
+            }
+            if (isset($part['text']) && is_string($part['text'])) {
+                $text .= $part['text'];
+            } elseif (isset($part['content']) && is_string($part['content'])) {
+                $text .= $part['content'];
+            }
+        }
+
+        return $text === '' ? null : $text;
     }
 
     private function callClaude(string $model, string $mime, string $base64, ?string $apiKey = null): string
@@ -358,7 +438,9 @@ PROMPT;
                 'average_bid' => $this->parseMoney($avgRaw),
                 'my_bid_raw' => $myRaw,
                 'my_bid' => $this->parseMoney($myRaw),
-                'bid_type' => $this->detectBidType($myRaw) ?? $this->detectBidType($avgRaw),
+                'bid_type' => $this->normalizeBidType($row['bid_type'] ?? null)
+                    ?? $this->detectBidType($myRaw)
+                    ?? $this->detectBidType($avgRaw),
                 'bid_placed_raw' => $placedRaw,
                 'bid_placed_at' => $this->parseRelativeTime($placedRaw),
                 'bid_rank_raw' => $rankRaw,
@@ -454,6 +536,16 @@ PROMPT;
         }
 
         return round((float) $clean, 2);
+    }
+
+    private function normalizeBidType(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+        $v = strtolower(trim($value));
+
+        return str_contains($v, 'hour') ? 'hourly' : (str_contains($v, 'fix') ? 'fixed' : null);
     }
 
     private function detectBidType(?string $raw): ?string
