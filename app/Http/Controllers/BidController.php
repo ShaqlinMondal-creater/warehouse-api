@@ -15,7 +15,7 @@ class BidController extends Controller
         $this->authorizeWorkspace($request, $bidWorkspace);
 
         $bids = $bidWorkspace->bids()
-            ->orderByDesc('last_synced_at')
+            ->orderByDesc('bid_placed_at')
             ->orderByDesc('id')
             ->get();
 
