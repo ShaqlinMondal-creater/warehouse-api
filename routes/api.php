@@ -7,6 +7,8 @@ use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\PortfolioController;
+use App\Http\Controllers\PublicPortfolioController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\WorkProjectController;
 use Illuminate\Support\Facades\Route;
@@ -21,10 +23,17 @@ Route::get('/health', function () {
 
 Route::post('/login', [AuthController::class, 'login']);
 
+/** Public portfolio for third-party sites (Vercel portfolio, etc.) */
+Route::get('/public/portfolio', [PublicPortfolioController::class, 'show']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/overview', OverviewController::class);
+
+    Route::get('/portfolio', [PortfolioController::class, 'show']);
+    Route::put('/portfolio', [PortfolioController::class, 'update']);
+    Route::patch('/portfolio', [PortfolioController::class, 'update']);
 
     Route::apiResource('work-projects', WorkProjectController::class);
     Route::apiResource('bid-workspaces', BidWorkspaceController::class);
