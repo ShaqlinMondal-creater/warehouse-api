@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\PortfolioProfile;
+use App\Models\Upload;
 use App\Models\WorkProject;
+use App\Services\UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PortfolioController extends Controller
 {
+    public function __construct(private UploadService $uploads) {}
+
     /** Full portfolio for Warehouse (auth). */
     public function show(Request $request): JsonResponse
     {
@@ -17,9 +21,11 @@ class PortfolioController extends Controller
             ['user_id' => $user->id],
             ['is_public' => true],
         );
+        $profile->load('avatar');
 
         $projects = WorkProject::query()
             ->where('user_id', $user->id)
+            ->with('gallery')
             ->orderBy('sort_order')
             ->orderByDesc('id')
             ->get();
@@ -60,6 +66,41 @@ class PortfolioController extends Controller
             $data,
         );
 
-        return response()->json(['data' => $profile->fresh()]);
+        return response()->json(['data' => $profile->fresh()->load('avatar')]);
+    }
+
+    /** Upload / replace profile photo (uploads table → collection=avatar). */
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'max:4096'],
+        ]);
+
+        $profile = PortfolioProfile::query()->firstOrCreate(
+            ['user_id' => $request->user()->id],
+            ['is_public' => true],
+        );
+
+        $this->uploads->replace(
+            $profile,
+            $request->user()->id,
+            Upload::COLLECTION_AVATAR,
+            $request->file('avatar'),
+            'portfolio/avatars/'.$request->user()->id,
+        );
+
+        return response()->json(['data' => $profile->fresh()->load('avatar')]);
+    }
+
+    /** Remove profile photo. */
+    public function destroyAvatar(Request $request): JsonResponse
+    {
+        $profile = PortfolioProfile::query()->where('user_id', $request->user()->id)->first();
+
+        if ($profile) {
+            $this->uploads->clearCollection($profile, Upload::COLLECTION_AVATAR);
+        }
+
+        return response()->json(['data' => $profile?->fresh()->load('avatar')]);
     }
 }

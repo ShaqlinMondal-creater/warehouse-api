@@ -24,7 +24,7 @@ class PublicPortfolioController extends Controller
             $profileQuery->where('user_id', (int) $userId);
         }
 
-        $profile = $profileQuery->orderBy('id')->first();
+        $profile = $profileQuery->with('avatar')->orderBy('id')->first();
 
         if (! $profile) {
             return response()->json([
@@ -36,24 +36,10 @@ class PublicPortfolioController extends Controller
         $projects = WorkProject::query()
             ->where('user_id', $profile->user_id)
             ->where('is_public', true)
+            ->with('gallery')
             ->orderBy('sort_order')
             ->orderByDesc('id')
-            ->get([
-                'id',
-                'title',
-                'slug',
-                'summary',
-                'description',
-                'role',
-                'stack',
-                'platform_or_client',
-                'status',
-                'url',
-                'repo_url',
-                'cover_path',
-                'sort_order',
-                'meta',
-            ]);
+            ->get();
 
         /** @var User|null $user */
         $user = User::query()->find($profile->user_id);
@@ -72,6 +58,7 @@ class PublicPortfolioController extends Controller
                     'current_role' => $profile->current_role,
                     'current_company' => $profile->current_company,
                     'portfolio_url' => $profile->portfolio_url,
+                    'avatar_url' => $profile->avatar_url,
                     'stats' => $profile->stats,
                     'services' => $profile->services,
                     'experience' => $profile->experience,
@@ -79,7 +66,23 @@ class PublicPortfolioController extends Controller
                     'education' => $profile->education,
                     'social' => $profile->social,
                 ],
-                'projects' => $projects,
+                'projects' => $projects->map(fn (WorkProject $p) => [
+                    'id' => $p->id,
+                    'title' => $p->title,
+                    'slug' => $p->slug,
+                    'summary' => $p->summary,
+                    'description' => $p->description,
+                    'role' => $p->role,
+                    'stack' => $p->stack,
+                    'platform_or_client' => $p->platform_or_client,
+                    'status' => $p->status,
+                    'url' => $p->url,
+                    'repo_url' => $p->repo_url,
+                    'cover_url' => $p->cover_url,
+                    'images' => $p->images,
+                    'sort_order' => $p->sort_order,
+                    'meta' => $p->meta,
+                ]),
             ],
         ]);
     }

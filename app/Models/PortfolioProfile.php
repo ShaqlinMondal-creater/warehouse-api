@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 #[Fillable([
     'user_id',
@@ -28,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class PortfolioProfile extends Model
 {
+    protected $appends = ['avatar_url'];
+
     protected function casts(): array
     {
         return [
@@ -45,5 +49,25 @@ class PortfolioProfile extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function uploads(): MorphMany
+    {
+        return $this->morphMany(Upload::class, 'uploadable');
+    }
+
+    public function avatar(): MorphOne
+    {
+        return $this->morphOne(Upload::class, 'uploadable')
+            ->where('collection', Upload::COLLECTION_AVATAR);
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $avatar = $this->relationLoaded('avatar')
+            ? $this->avatar
+            : $this->avatar()->first();
+
+        return $avatar?->url;
     }
 }

@@ -34,7 +34,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/portfolio', [PortfolioController::class, 'show']);
     Route::put('/portfolio', [PortfolioController::class, 'update']);
     Route::patch('/portfolio', [PortfolioController::class, 'update']);
+    Route::post('/portfolio/avatar', [PortfolioController::class, 'uploadAvatar']);
+    Route::delete('/portfolio/avatar', [PortfolioController::class, 'destroyAvatar']);
 
+    Route::post('work-projects/{work_project}/images', [WorkProjectController::class, 'storeImage']);
+    Route::put('work-projects/{work_project}/images/reorder', [WorkProjectController::class, 'reorderImages']);
+    Route::delete('work-projects/{work_project}/images/{upload}', [WorkProjectController::class, 'destroyImage']);
     Route::apiResource('work-projects', WorkProjectController::class);
     Route::apiResource('bid-workspaces', BidWorkspaceController::class);
 
