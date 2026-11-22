@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use App\Models\PortfolioProfile;
-use App\Models\User;
 use App\Models\WorkProject;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
@@ -23,9 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // enforceMorphMap requires every morphable model — include User for Sanctum tokens
-        Relation::enforceMorphMap([
-            'user' => User::class,
+        // morphMap (not enforce): aliases for uploads, without breaking Sanctum's User tokens
+        Relation::morphMap([
             'portfolio_profile' => PortfolioProfile::class,
             'work_project' => WorkProject::class,
         ]);
