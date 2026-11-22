@@ -8,6 +8,7 @@ use App\Models\WorkProject;
 use App\Services\UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class PortfolioController extends Controller
 {
@@ -72,8 +73,20 @@ class PortfolioController extends Controller
     /** Upload / replace profile photo (uploads table → collection=avatar). */
     public function uploadAvatar(Request $request): JsonResponse
     {
+        $file = $request->file('avatar');
+        if (! $file) {
+            throw ValidationException::withMessages([
+                'avatar' => ['No avatar file received.'],
+            ]);
+        }
+        if (! $file->isValid()) {
+            throw ValidationException::withMessages([
+                'avatar' => [$file->getErrorMessage()],
+            ]);
+        }
+
         $request->validate([
-            'avatar' => ['required', 'image', 'max:4096'],
+            'avatar' => ['required', 'file', 'mimes:jpg,jpeg,png,gif,webp', 'max:4096'],
         ]);
 
         $profile = PortfolioProfile::query()->firstOrCreate(
@@ -85,7 +98,7 @@ class PortfolioController extends Controller
             $profile,
             $request->user()->id,
             Upload::COLLECTION_AVATAR,
-            $request->file('avatar'),
+            $file,
             'portfolio/avatars/'.$request->user()->id,
         );
 

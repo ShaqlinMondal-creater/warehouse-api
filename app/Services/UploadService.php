@@ -90,12 +90,18 @@ class UploadService
     ): Upload {
         $path = $file->store($folder, 'public');
 
+        if ($path === false || $path === '') {
+            throw new \RuntimeException(
+                'Could not store upload on the public disk. Run `php artisan storage:link` and ensure storage/app/public is writable.',
+            );
+        }
+
         return Upload::query()->create([
             'user_id' => $userId,
             'disk' => 'public',
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
-            'mime' => $file->getClientMimeType(),
+            'mime' => $file->getClientMimeType() ?: $file->getMimeType(),
             'size' => $file->getSize() ?: null,
             'collection' => $collection,
             'uploadable_type' => $uploadable->getMorphClass(),

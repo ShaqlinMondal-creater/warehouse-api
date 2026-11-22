@@ -8,6 +8,7 @@ use App\Services\UploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class WorkProjectController extends Controller
 {
@@ -65,15 +66,28 @@ class WorkProjectController extends Controller
     {
         $this->authorizeOwner($request, $workProject);
 
+        $file = $request->file('image');
+        if (! $file) {
+            throw ValidationException::withMessages([
+                'image' => ['No image file received. Use multipart form field "image".'],
+            ]);
+        }
+        if (! $file->isValid()) {
+            // Surface real PHP limit errors (upload_max_filesize / partial upload / tmp dir).
+            throw ValidationException::withMessages([
+                'image' => [$file->getErrorMessage()],
+            ]);
+        }
+
         $request->validate([
-            'image' => ['required', 'image', 'max:5120'],
+            'image' => ['required', 'file', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
         ]);
 
         $this->uploads->append(
             $workProject,
             $request->user()->id,
             Upload::COLLECTION_GALLERY,
-            $request->file('image'),
+            $file,
             'portfolio/projects/'.$request->user()->id.'/'.$workProject->id,
         );
 
