@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,13 +11,9 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function login(Request $request): JsonResponse
+    public function login(LoginRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-            'device_name' => ['nullable', 'string', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         /** @var User|null $user */
         $user = User::query()->where('email', $data['email'])->first();
@@ -48,6 +45,9 @@ class AuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function userPayload(User $user): array
     {
         return [

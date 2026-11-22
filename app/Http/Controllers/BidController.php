@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesOwnedResources;
+use App\Http\Requests\Bids\StoreBidRequest;
+use App\Http\Requests\Bids\UpdateBidRequest;
 use App\Models\Bid;
 use App\Models\BidWorkspace;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BidController extends Controller
 {
+    use AuthorizesOwnedResources;
+
     public function index(Request $request, BidWorkspace $bidWorkspace): JsonResponse
     {
         $this->authorizeWorkspace($request, $bidWorkspace);
@@ -22,10 +27,10 @@ class BidController extends Controller
         return response()->json(['data' => $bids]);
     }
 
-    public function store(Request $request, BidWorkspace $bidWorkspace): JsonResponse
+    public function store(StoreBidRequest $request, BidWorkspace $bidWorkspace): JsonResponse
     {
         $this->authorizeWorkspace($request, $bidWorkspace);
-        $data = $this->validated($request);
+        $data = $request->validated();
         $data['bid_workspace_id'] = $bidWorkspace->id;
         $data['last_synced_at'] = now();
 
@@ -47,10 +52,10 @@ class BidController extends Controller
         return response()->json(['data' => $bid]);
     }
 
-    public function update(Request $request, Bid $bid): JsonResponse
+    public function update(UpdateBidRequest $request, Bid $bid): JsonResponse
     {
         $this->authorizeBid($request, $bid);
-        $bid->update($this->validated($request, partial: true));
+        $bid->update($request->validated());
 
         return response()->json(['data' => $bid->fresh()]);
     }
@@ -63,7 +68,6 @@ class BidController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Metrics + list stats for one workspace */
     public function analytics(Request $request, BidWorkspace $bidWorkspace): JsonResponse
     {
         $this->authorizeWorkspace($request, $bidWorkspace);
@@ -90,67 +94,10 @@ class BidController extends Controller
                 'win_rate' => $winRate,
                 'avg_my_bid' => $avgMyBid !== null ? round((float) $avgMyBid, 2) : null,
                 'avg_market_bid' => $avgMarket !== null ? round((float) $avgMarket, 2) : null,
-                'avg_my_bid_label' => $this->moneyLabel($avgMyBid, $currency),
-                'avg_market_bid_label' => $this->moneyLabel($avgMarket, $currency),
+                'avg_my_bid_label' => Money::label($avgMyBid, $currency),
+                'avg_market_bid_label' => Money::label($avgMarket, $currency),
                 'win_rate_label' => rtrim(rtrim(number_format($winRate, 1, '.', ''), '0'), '.').'%',
             ],
         ]);
-    }
-
-    private function moneyLabel(mixed $amount, string $currency): string
-    {
-        if ($amount === null) {
-            return '—';
-        }
-
-        $value = (float) $amount;
-        $symbol = match (strtoupper($currency)) {
-            'USD' => '$',
-            'EUR' => '€',
-            'GBP' => '£',
-            default => '₹',
-        };
-
-        if ($value >= 1000) {
-            return $symbol.rtrim(rtrim(number_format($value / 1000, 1, '.', ''), '0'), '.').'k';
-        }
-
-        return $symbol.number_format($value, $value == floor($value) ? 0 : 2);
-    }
-
-    private function validated(Request $request, bool $partial = false): array
-    {
-        $required = $partial ? ['sometimes'] : ['required'];
-
-        return $request->validate([
-            'project_name' => [...$required, 'string', 'max:255'],
-            'client_name' => ['nullable', 'string', 'max:190'],
-            'external_key' => ['nullable', 'string', 'max:190'],
-            'total_bids' => ['nullable', 'integer', 'min:0'],
-            'average_bid' => ['nullable', 'numeric'],
-            'average_bid_raw' => ['nullable', 'string', 'max:80'],
-            'my_bid' => ['nullable', 'numeric'],
-            'my_bid_raw' => ['nullable', 'string', 'max:80'],
-            'bid_type' => ['nullable', 'in:fixed,hourly'],
-            'my_rank' => ['nullable', 'string', 'max:20'],
-            'client_viewed' => ['nullable', 'boolean'],
-            'status' => ['nullable', 'in:active,watching,won,lost,archived'],
-            'chatting' => ['nullable', 'string', 'max:80'],
-            'bid_placed_at' => ['nullable', 'date'],
-            'source' => ['nullable', 'in:manual,screenshot,import'],
-            'notes' => ['nullable', 'string'],
-            'meta' => ['nullable', 'array'],
-        ]);
-    }
-
-    private function authorizeWorkspace(Request $request, BidWorkspace $workspace): void
-    {
-        abort_unless($workspace->user_id === $request->user()->id, 404);
-    }
-
-    private function authorizeBid(Request $request, Bid $bid): void
-    {
-        $bid->loadMissing('workspace');
-        abort_unless($bid->workspace?->user_id === $request->user()->id, 404);
     }
 }
