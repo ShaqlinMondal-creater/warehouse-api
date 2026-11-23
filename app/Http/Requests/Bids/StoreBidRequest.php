@@ -27,6 +27,7 @@ class StoreBidRequest extends FormRequest
             'my_bid_raw' => ['nullable', 'string', 'max:80'],
             'bid_type' => ['nullable', 'in:fixed,hourly'],
             'my_rank' => ['nullable', 'string', 'max:20'],
+            'updated_rank' => ['nullable', 'string', 'max:20'],
             'client_viewed' => ['nullable', 'boolean'],
             'status' => ['nullable', 'in:active,watching,won,lost,archived'],
             'chatting' => ['nullable', 'string', 'max:80'],

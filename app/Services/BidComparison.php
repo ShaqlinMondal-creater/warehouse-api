@@ -14,8 +14,13 @@ final class BidComparison
         $incomingViewed = array_key_exists('client_viewed', $row) ? $row['client_viewed'] : false;
         $existingViewed = $existing->client_viewed ?? false;
 
+        // Effective rank is latest updated_rank when set, otherwise original my_rank.
+        $effectiveRank = $existing->updated_rank !== null && $existing->updated_rank !== ''
+            ? $existing->updated_rank
+            : $existing->my_rank;
+
         return $this->sameInt($existing->total_bids, $row['total_bids'] ?? null)
-            && $this->sameRank($existing->my_rank, $row['my_rank'] ?? null)
+            && $this->sameRank($effectiveRank, $row['my_rank'] ?? null)
             && $this->sameNumber($existing->my_bid, $row['my_bid'] ?? null)
             && $this->sameNumber($existing->average_bid, $row['average_bid'] ?? null)
             && (bool) $existingViewed === (bool) $incomingViewed;

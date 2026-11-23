@@ -21,6 +21,7 @@ class ImportBidsRequest extends FormRequest
             'bids.*.project_name' => ['required', 'string', 'max:255'],
             'bids.*.total_bids' => ['nullable', 'integer', 'min:0'],
             'bids.*.my_rank' => ['nullable', 'string', 'max:20'],
+            'bids.*.updated_rank' => ['nullable', 'string', 'max:20'],
             'bids.*.client_viewed' => ['nullable', 'boolean'],
             'bids.*.average_bid' => ['nullable', 'numeric'],
             'bids.*.average_bid_raw' => ['nullable', 'string', 'max:80'],

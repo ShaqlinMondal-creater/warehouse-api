@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'my_bid_raw',
     'bid_type',
     'my_rank',
+    'updated_rank',
     'client_viewed',
     'status',
     'chatting',
