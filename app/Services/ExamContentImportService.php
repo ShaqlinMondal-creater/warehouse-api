@@ -32,7 +32,6 @@ class ExamContentImportService
             'questions' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
             'notes' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
             'sets_scanned' => 0,
-            'pack_path' => $dir,
         ];
 
         $this->importChapters($user, $subject, $dir, $stats);
@@ -77,25 +76,25 @@ class ExamContentImportService
             return;
         }
 
-        $progress = json_decode((string) file_get_contents($progressPath), true);
+        $progress = json_decode($this->readUtf8File($progressPath), true);
         if (! is_array($progress) || ! isset($progress['chapters']) || ! is_array($progress['chapters'])) {
             return;
         }
 
         foreach ($progress['chapters'] as $code => $raw) {
-            $code = trim((string) $code);
+            $code = $this->utf8(trim((string) $code));
             if ($code === '') {
                 continue;
             }
-            $meta = is_array($raw) ? $raw : ['value' => $raw];
+            $meta = is_array($raw) ? $this->utf8Deep($raw) : ['value' => $raw];
             $payload = [
-                'title' => isset($meta['title']) ? (string) $meta['title'] : null,
-                'status' => isset($meta['status']) ? (string) $meta['status'] : null,
+                'title' => isset($meta['title']) ? $this->utf8((string) $meta['title']) : null,
+                'status' => isset($meta['status']) ? $this->utf8((string) $meta['status']) : null,
                 'mcq_used' => isset($meta['mcqUsed']) ? (int) $meta['mcqUsed'] : (isset($meta['mcq_used']) ? (int) $meta['mcq_used'] : null),
                 'mcq_target' => isset($meta['mcqTarget']) ? (int) $meta['mcqTarget'] : (isset($meta['mcq_target']) ? (int) $meta['mcq_target'] : null),
                 'meta' => $meta,
             ];
-            $hash = hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE));
+            $hash = $this->contentHash($payload);
 
             $existing = ExamContentChapter::query()
                 ->where('user_id', $user->id)
@@ -146,9 +145,9 @@ class ExamContentImportService
 
             $absolute = $file->getPathname();
             $relative = 'notes/'.str_replace('\\', '/', $file->getRelativePathname());
-            $body = (string) file_get_contents($absolute);
+            $body = $this->readUtf8File($absolute);
             $hash = hash('sha256', $body);
-            $title = $this->noteTitle($body, $file->getFilenameWithoutExtension());
+            $title = $this->utf8($this->noteTitle($body, $file->getFilenameWithoutExtension()));
 
             $existing = ExamContentNote::query()
                 ->where('user_id', $user->id)
@@ -206,31 +205,36 @@ class ExamContentImportService
             $qRel = 'practice/sets/'.$name;
             $aRel = is_file($aPath) ? 'practice/sets/'.$aName : null;
 
-            $questions = $this->parser->parseQuestions((string) file_get_contents($qPath));
+            $questions = $this->parser->parseQuestions($this->readUtf8File($qPath));
             $answers = is_file($aPath)
-                ? $this->parser->parseAnswers((string) file_get_contents($aPath))
+                ? $this->parser->parseAnswers($this->readUtf8File($aPath))
                 : [];
 
             foreach ($questions as $q) {
-                $externalId = trim((string) $q['id']);
+                $externalId = $this->utf8(trim((string) $q['id']));
                 if ($externalId === '') {
                     continue;
                 }
 
                 $no = (int) $q['no'];
                 $answerRow = $answers[$no] ?? null;
+                $options = $this->utf8Deep($q['options'] ?? []);
                 $payload = [
                     'set_key' => $setKey,
                     'question_no' => $no,
-                    'chapter_code' => $q['chapter'] ?? null,
-                    'stem' => (string) $q['stem'],
-                    'options' => $q['options'] ?? [],
+                    'chapter_code' => isset($q['chapter']) && $q['chapter'] !== null
+                        ? $this->utf8((string) $q['chapter'])
+                        : null,
+                    'stem' => $this->utf8((string) $q['stem']),
+                    'options' => is_array($options) ? $options : [],
                     'correct_answer' => $answerRow['answer'] ?? null,
-                    'explanation' => $answerRow['explanation'] ?? null,
+                    'explanation' => isset($answerRow['explanation'])
+                        ? $this->utf8((string) $answerRow['explanation'])
+                        : null,
                     'source_questions_file' => $qRel,
                     'source_answers_file' => $aRel,
                 ];
-                $hash = hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE));
+                $hash = $this->contentHash($payload);
 
                 $existing = ExamContentQuestion::query()
                     ->where('user_id', $user->id)
@@ -292,6 +296,73 @@ class ExamContentImportService
         }
 
         return $fallback;
+    }
+
+    private function readUtf8File(string $path): string
+    {
+        return $this->utf8((string) file_get_contents($path));
+    }
+
+    private function utf8(string $value): string
+    {
+        // Strip UTF-8 BOM
+        if (str_starts_with($value, "\xEF\xBB\xBF")) {
+            $value = substr($value, 3);
+        }
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (! mb_check_encoding($value, 'UTF-8')) {
+            $detected = mb_detect_encoding(
+                $value,
+                ['UTF-8', 'UTF-16LE', 'UTF-16BE', 'ISO-8859-1', 'Windows-1252'],
+                true,
+            );
+            $converted = @mb_convert_encoding($value, 'UTF-8', $detected ?: 'ISO-8859-1');
+            $value = is_string($converted) ? $converted : $value;
+        }
+
+        // Drop any remaining invalid byte sequences so json_encode never blows up
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+
+        return is_string($clean) ? $clean : '';
+    }
+
+    /**
+     * @param  mixed  $value
+     * @return mixed
+     */
+    private function utf8Deep(mixed $value): mixed
+    {
+        if (is_string($value)) {
+            return $this->utf8($value);
+        }
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $out = [];
+        foreach ($value as $k => $v) {
+            $key = is_string($k) ? $this->utf8($k) : $k;
+            $out[$key] = $this->utf8Deep($v);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function contentHash(array $payload): string
+    {
+        $json = json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+
+        return hash('sha256', is_string($json) ? $json : serialize($payload));
     }
 
     private function packDir(User $user, ExamSet $exam, ExamSubject $subject): string

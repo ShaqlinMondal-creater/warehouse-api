@@ -22,13 +22,13 @@ class ExamContentImportController extends Controller
             [$set, $sub] = $this->resolve($exam, $subject);
             $result = $this->import->importFromSyncedPack($request->user(), $set, $sub);
 
-            return response()->json([
+            return $this->safeJson([
                 'ok' => true,
                 'message' => 'Content imported into exam_content_* tables.',
                 'data' => $result,
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            return $this->safeJson(['message' => $this->utf8Message($e->getMessage())], 422);
         }
     }
 
@@ -37,12 +37,32 @@ class ExamContentImportController extends Controller
         try {
             [, $sub] = $this->resolve($exam, $subject);
 
-            return response()->json([
+            return $this->safeJson([
                 'data' => $this->import->summary($request->user(), $sub),
             ]);
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 404);
+            return $this->safeJson(['message' => $this->utf8Message($e->getMessage())], 404);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function safeJson(array $payload, int $status = 200): JsonResponse
+    {
+        return response()->json(
+            $payload,
+            $status,
+            [],
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+    }
+
+    private function utf8Message(string $message): string
+    {
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $message);
+
+        return is_string($clean) && $clean !== '' ? $clean : 'Import failed.';
     }
 
     /**
