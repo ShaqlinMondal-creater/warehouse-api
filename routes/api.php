@@ -70,9 +70,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('ai-models/{aiModel}', [AiModelController::class, 'destroy']);
     Route::post('ai-models/{aiModel}/default', [AiModelController::class, 'setDefault']);
 
-    /** Exams — catalog in DB; subject packs live as extracted zip files on disk */
+    /** Exams — catalog CRUD in DB; subject packs = zip extract on disk */
     Route::get('exams', [ExamController::class, 'index']);
+    Route::post('exams', [ExamController::class, 'store']);
     Route::get('exams/{exam}', [ExamController::class, 'show']);
+    Route::put('exams/{exam}', [ExamController::class, 'update']);
+    Route::patch('exams/{exam}', [ExamController::class, 'update']);
+    Route::delete('exams/{exam}', [ExamController::class, 'destroy']);
+    Route::post('exams/{exam}/subjects', [ExamController::class, 'storeSubject']);
+    Route::put('exams/{exam}/subjects/{subject}', [ExamController::class, 'updateSubject']);
+    Route::patch('exams/{exam}/subjects/{subject}', [ExamController::class, 'updateSubject']);
+    Route::delete('exams/{exam}/subjects/{subject}', [ExamController::class, 'destroySubject']);
     Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
     Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
 });
