@@ -120,6 +120,38 @@ class ExamPackSyncService
         }
     }
 
+    /** Delete extracted files + clear per-user sync state (subject catalog row stays). */
+    public function clearSubjectPack(User $user, ExamSet $exam, ExamSubject $subject): void
+    {
+        if ($subject->exam_set_id !== $exam->id) {
+            throw new RuntimeException('Subject does not belong to this exam.');
+        }
+
+        $relativeBase = 'exams/'.$user->id.'/'.$exam->slug.'/'.$subject->slug;
+        $absoluteBase = storage_path('app/private/'.$relativeBase);
+        if (is_dir($absoluteBase)) {
+            File::deleteDirectory($absoluteBase);
+        }
+
+        ExamSubjectState::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->delete();
+
+        ExamSync::query()->create([
+            'user_id' => $user->id,
+            'exam_subject_id' => $subject->id,
+            'original_name' => '(cleared)',
+            'bytes' => 0,
+            'status' => 'ok',
+            'storage_path' => null,
+            'files_indexed' => 0,
+            'message' => 'Uploads removed.',
+            'progress' => null,
+            'synced_at' => now(),
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */

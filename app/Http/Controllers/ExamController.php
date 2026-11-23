@@ -226,6 +226,23 @@ class ExamController extends Controller
         }
     }
 
+    /** Remove extracted zip pack for this subject (keeps the subject row). */
+    public function clearPack(Request $request, string $exam, string $subject): JsonResponse
+    {
+        try {
+            [$set, $sub] = $this->findExamSubject($exam, $subject, requireEnabled: false);
+            $this->packs->clearSubjectPack($request->user(), $set, $sub);
+
+            return response()->json([
+                'ok' => true,
+                'data' => $this->packs->subjectSummary($request->user(), $set, $sub),
+                'message' => 'Uploads removed.',
+            ]);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
+    }
+
     /**
      * @param  \Illuminate\Support\Collection<int, ExamSubjectState>|null  $states
      * @return array<string, mixed>
@@ -302,10 +319,10 @@ class ExamController extends Controller
     /**
      * @return array{0: ExamSet, 1: ExamSubject}
      */
-    private function findExamSubject(string $exam, string $subject): array
+    private function findExamSubject(string $exam, string $subject, bool $requireEnabled = true): array
     {
-        $set = $this->findExam($exam, requireEnabled: true);
-        $sub = $this->findSubjectOnExam($set, $subject, requireEnabled: true);
+        $set = $this->findExam($exam, requireEnabled: $requireEnabled);
+        $sub = $this->findSubjectOnExam($set, $subject, requireEnabled: $requireEnabled);
 
         return [$set, $sub];
     }

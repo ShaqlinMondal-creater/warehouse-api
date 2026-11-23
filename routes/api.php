@@ -83,4 +83,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('exams/{exam}/subjects/{subject}', [ExamController::class, 'destroySubject']);
     Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
     Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
+    Route::delete('exams/{exam}/subjects/{subject}/pack', [ExamController::class, 'clearPack']);
 });
