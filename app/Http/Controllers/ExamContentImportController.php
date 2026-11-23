@@ -45,6 +45,23 @@ class ExamContentImportController extends Controller
         }
     }
 
+    public function note(Request $request, string $exam, string $subject): JsonResponse
+    {
+        $data = $request->validate([
+            'path' => ['required', 'string', 'max:255'],
+        ]);
+
+        try {
+            [, $sub] = $this->resolve($exam, $subject);
+
+            return $this->safeJson([
+                'data' => $this->import->getNote($request->user(), $sub, $data['path']),
+            ]);
+        } catch (RuntimeException $e) {
+            return $this->safeJson(['message' => $this->utf8Message($e->getMessage())], 404);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      */

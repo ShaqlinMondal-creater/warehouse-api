@@ -332,6 +332,30 @@ class ExamContentImportService
     }
 
     /**
+     * @return array{relative_path:string,title:string|null,body:string,updated_at:string|null}
+     */
+    public function getNote(User $user, ExamSubject $subject, string $relativePath): array
+    {
+        $path = str_replace('\\', '/', trim($relativePath));
+        $note = ExamContentNote::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->where('relative_path', $path)
+            ->first();
+
+        if (! $note) {
+            throw new RuntimeException('Note not found in DB bank. Import content first.');
+        }
+
+        return [
+            'relative_path' => $note->relative_path,
+            'title' => $note->title,
+            'body' => $note->body,
+            'updated_at' => $note->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
      * @return array{chapters:int,questions:int,notes:int}
      */
     private function summaryCounts(User $user, ExamSubject $subject): array
