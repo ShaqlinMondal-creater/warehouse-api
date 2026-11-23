@@ -21,8 +21,8 @@ return new class extends Migration
             $table->string('content_hash', 64)->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'exam_subject_id', 'code'], 'exam_content_chapters_user_subject_code');
-            $table->index(['exam_subject_id', 'code']);
+            $table->unique(['user_id', 'exam_subject_id', 'code'], 'ec_chapters_user_subj_code_uq');
+            $table->index(['exam_subject_id', 'code'], 'ec_chapters_subj_code_idx');
         });
 
         Schema::create('exam_content_questions', function (Blueprint $table) {
@@ -42,9 +42,9 @@ return new class extends Migration
             $table->string('content_hash', 64)->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'exam_subject_id', 'external_id'], 'exam_content_questions_user_subject_ext');
-            $table->index(['user_id', 'exam_subject_id', 'set_key']);
-            $table->index(['user_id', 'exam_subject_id', 'chapter_code']);
+            $table->unique(['user_id', 'exam_subject_id', 'external_id'], 'ec_questions_user_subj_ext_uq');
+            $table->index(['user_id', 'exam_subject_id', 'set_key'], 'ec_questions_user_subj_set_idx');
+            $table->index(['user_id', 'exam_subject_id', 'chapter_code'], 'ec_questions_user_subj_ch_idx');
         });
 
         Schema::create('exam_content_notes', function (Blueprint $table) {
@@ -57,8 +57,8 @@ return new class extends Migration
             $table->string('content_hash', 64)->nullable();
             $table->timestamps();
 
-            $table->unique(['user_id', 'exam_subject_id', 'relative_path'], 'exam_content_notes_user_subject_path');
-            $table->index(['exam_subject_id', 'relative_path']);
+            $table->unique(['user_id', 'exam_subject_id', 'relative_path'], 'ec_notes_user_subj_path_uq');
+            $table->index(['exam_subject_id', 'relative_path'], 'ec_notes_subj_path_idx');
         });
     }
 
