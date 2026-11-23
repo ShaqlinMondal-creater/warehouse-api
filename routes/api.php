@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
+use App\Http\Controllers\ExamController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PortfolioController;
@@ -68,4 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('ai-models/{aiModel}', [AiModelController::class, 'update']);
     Route::delete('ai-models/{aiModel}', [AiModelController::class, 'destroy']);
     Route::post('ai-models/{aiModel}/default', [AiModelController::class, 'setDefault']);
+
+    /** Exams — catalog in DB; subject packs live as extracted zip files on disk */
+    Route::get('exams', [ExamController::class, 'index']);
+    Route::get('exams/{exam}', [ExamController::class, 'show']);
+    Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
+    Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
 });
