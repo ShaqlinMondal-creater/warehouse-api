@@ -290,11 +290,13 @@ class ExamPracticeService
                         'accuracy_percent' => null,
                     ];
                 }
-                $byChapter[$chapter]['seen']++;
                 $isCorrect = $row['is_correct'] ?? null;
+                // Only graded answers count as "seen" for knowledge tracking
                 if ($isCorrect === true) {
+                    $byChapter[$chapter]['seen']++;
                     $byChapter[$chapter]['correct']++;
                 } elseif ($isCorrect === false) {
+                    $byChapter[$chapter]['seen']++;
                     $byChapter[$chapter]['incorrect']++;
                 } else {
                     $byChapter[$chapter]['skipped']++;

@@ -48,6 +48,67 @@ class ExamContentImportService
      */
     public function summary(User $user, ExamSubject $subject): array
     {
+        $chapterQuestionCounts = ExamContentQuestion::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->selectRaw('COALESCE(chapter_code, ?) as chapter_code, COUNT(*) as question_count', ['Unknown'])
+            ->groupBy('chapter_code')
+            ->pluck('question_count', 'chapter_code');
+
+        $chapters = ExamContentChapter::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->orderBy('code')
+            ->get(['code', 'title', 'status', 'mcq_used', 'mcq_target'])
+            ->map(function (ExamContentChapter $ch) use ($chapterQuestionCounts) {
+                return [
+                    'code' => $ch->code,
+                    'title' => $ch->title,
+                    'status' => $ch->status,
+                    'mcq_used' => $ch->mcq_used,
+                    'mcq_target' => $ch->mcq_target,
+                    'question_count' => (int) ($chapterQuestionCounts[$ch->code] ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
+
+        // Include chapter codes that appear on questions but not in progress.json
+        foreach ($chapterQuestionCounts as $code => $count) {
+            $code = (string) $code;
+            $exists = false;
+            foreach ($chapters as $row) {
+                if ($row['code'] === $code) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (! $exists) {
+                $chapters[] = [
+                    'code' => $code,
+                    'title' => null,
+                    'status' => null,
+                    'mcq_used' => null,
+                    'mcq_target' => null,
+                    'question_count' => (int) $count,
+                ];
+            }
+        }
+
+        usort($chapters, fn ($a, $b) => strcmp((string) $a['code'], (string) $b['code']));
+
+        $notes = ExamContentNote::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->orderBy('relative_path')
+            ->get(['relative_path', 'title', 'updated_at'])
+            ->map(fn (ExamContentNote $n) => [
+                'relative_path' => $n->relative_path,
+                'title' => $n->title,
+                'updated_at' => $n->updated_at?->toIso8601String(),
+            ])
+            ->all();
+
         return [
             'totals' => $this->summaryCounts($user, $subject),
             'sets' => ExamContentQuestion::query()
@@ -63,6 +124,8 @@ class ExamContentImportService
                     'question_count' => (int) $r->question_count,
                 ])
                 ->all(),
+            'chapters' => $chapters,
+            'notes' => $notes,
         ];
     }
 
