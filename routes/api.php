@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /** Exams — catalog in DB; subject packs live as extracted zip files on disk */
     Route::get('exams', [ExamController::class, 'index']);
+    Route::post('exams/setup', [ExamController::class, 'setup']);
     Route::get('exams/{exam}', [ExamController::class, 'show']);
     Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
     Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
