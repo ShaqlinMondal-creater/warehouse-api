@@ -356,6 +356,151 @@ class ExamContentImportService
     }
 
     /**
+     * Chapter study pack: matched notes + DB questions for that chapter code.
+     *
+     * @return array<string, mixed>
+     */
+    public function getChapter(User $user, ExamSubject $subject, string $chapterCode): array
+    {
+        $code = strtoupper(trim($chapterCode));
+        if ($code === '' || ! preg_match('/^[A-Z0-9_-]{1,40}$/', $code)) {
+            throw new RuntimeException('Invalid chapter code.');
+        }
+
+        $chapter = ExamContentChapter::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->where('code', $code)
+            ->first();
+
+        $notes = ExamContentNote::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->orderBy('relative_path')
+            ->get(['relative_path', 'title', 'body', 'updated_at']);
+
+        $matchedNotes = [];
+        $sharedExcerpts = [];
+        foreach ($notes as $note) {
+            $hay = strtoupper(($note->relative_path ?? '').' '.($note->title ?? ''));
+            if (preg_match('/(?:^|[^A-Z0-9])'.preg_quote($code, '/').'(?:[^A-Z0-9]|$)/', $hay)) {
+                $matchedNotes[] = [
+                    'relative_path' => $note->relative_path,
+                    'title' => $note->title,
+                    'body' => $note->body,
+                    'updated_at' => $note->updated_at?->toIso8601String(),
+                ];
+                continue;
+            }
+
+            // Pull a relevant slice from day micro-capsule / plan style notes
+            $excerpt = $this->excerptForChapter($note->body ?? '', $code, $chapter?->title);
+            if ($excerpt !== null) {
+                $sharedExcerpts[] = [
+                    'relative_path' => $note->relative_path,
+                    'title' => $note->title,
+                    'excerpt' => $excerpt,
+                ];
+            }
+        }
+
+        $questions = ExamContentQuestion::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->where('chapter_code', $code)
+            ->orderBy('set_key')
+            ->orderBy('question_no')
+            ->limit(30)
+            ->get([
+                'external_id',
+                'set_key',
+                'question_no',
+                'stem',
+                'options',
+                'correct_answer',
+                'explanation',
+            ])
+            ->map(fn (ExamContentQuestion $q) => [
+                'external_id' => $q->external_id,
+                'set_key' => $q->set_key,
+                'question_no' => $q->question_no,
+                'stem' => $q->stem,
+                'options' => $q->options,
+                'correct_answer' => $q->correct_answer,
+                'explanation' => $q->explanation,
+            ])
+            ->all();
+
+        $questionCount = ExamContentQuestion::query()
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id)
+            ->where('chapter_code', $code)
+            ->count();
+
+        return [
+            'chapter' => [
+                'code' => $code,
+                'title' => $chapter?->title,
+                'status' => $chapter?->status,
+                'mcq_used' => $chapter?->mcq_used,
+                'mcq_target' => $chapter?->mcq_target,
+                'question_count' => $questionCount,
+            ],
+            'notes' => $matchedNotes,
+            'shared_excerpts' => $sharedExcerpts,
+            'questions' => $questions,
+        ];
+    }
+
+    private function excerptForChapter(string $body, string $code, ?string $chapterTitle): ?string
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return null;
+        }
+
+        // Direct heading mentioning the code
+        if (preg_match('/^#{1,3}\s*[^\n]*'.preg_quote($code, '/').'[^\n]*$/mi', $body, $m, PREG_OFFSET_CAPTURE)) {
+            $start = $m[0][1];
+            $slice = substr($body, $start);
+            if (preg_match('/\n#{1,3}\s+/', $slice, $n, PREG_OFFSET_CAPTURE, 1)) {
+                $slice = substr($slice, 0, $n[0][1]);
+            }
+
+            return trim($this->utf8(mb_substr($slice, 0, 2500)));
+        }
+
+        $group = match (true) {
+            in_array($code, ['G01', 'G02', 'G03'], true) => ['বিজ্ঞান', 'Science'],
+            in_array($code, ['G04', 'G05', 'G06'], true) => ['ইতিহাস', 'History'],
+            in_array($code, ['G07', 'G08', 'G09'], true) => ['ভূগোল', 'Geography'],
+            $code === 'G10' => ['রাজনীতি', 'Polity', 'সংবিধান'],
+            $code === 'G11' => ['অর্থনীতি', 'Economy'],
+            $code === 'G12' => ['Current affairs', 'সাধারণ'],
+            default => [],
+        };
+
+        foreach ($group as $label) {
+            if (preg_match('/^##\s*[^\n]*'.preg_quote($label, '/').'[^\n]*$/miu', $body, $m, PREG_OFFSET_CAPTURE)) {
+                $start = $m[0][1];
+                $slice = substr($body, $start);
+                if (preg_match('/\n##\s+/u', $slice, $n, PREG_OFFSET_CAPTURE, 1)) {
+                    $slice = substr($slice, 0, $n[0][1]);
+                }
+
+                return trim($this->utf8(mb_substr($slice, 0, 2500)));
+            }
+        }
+
+        // Day-plan table row for this chapter
+        if ($chapterTitle && preg_match('/\|[^\n]*'.preg_quote($code, '/').'[^\n]*\|/u', $body, $row)) {
+            return trim($this->utf8($row[0]));
+        }
+
+        return null;
+    }
+
+    /**
      * @return array{chapters:int,questions:int,notes:int}
      */
     private function summaryCounts(User $user, ExamSubject $subject): array

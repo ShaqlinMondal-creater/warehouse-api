@@ -91,6 +91,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('exams/{exam}/subjects/{subject}/content/import', [ExamContentImportController::class, 'import']);
     Route::get('exams/{exam}/subjects/{subject}/content/summary', [ExamContentImportController::class, 'summary']);
     Route::get('exams/{exam}/subjects/{subject}/content/notes', [ExamContentImportController::class, 'note']);
+    Route::get('exams/{exam}/subjects/{subject}/content/chapters/{code}', [ExamContentImportController::class, 'chapter']);
 
     Route::get('exams/{exam}/subjects/{subject}/practice/sets', [ExamPracticeController::class, 'sets']);
     Route::get('exams/{exam}/subjects/{subject}/practice/performance', [ExamPracticeController::class, 'performance']);

@@ -62,6 +62,19 @@ class ExamContentImportController extends Controller
         }
     }
 
+    public function chapter(Request $request, string $exam, string $subject, string $code): JsonResponse
+    {
+        try {
+            [, $sub] = $this->resolve($exam, $subject);
+
+            return $this->safeJson([
+                'data' => $this->import->getChapter($request->user(), $sub, $code),
+            ]);
+        } catch (RuntimeException $e) {
+            return $this->safeJson(['message' => $this->utf8Message($e->getMessage())], 404);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      */
