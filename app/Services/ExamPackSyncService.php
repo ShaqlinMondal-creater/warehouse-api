@@ -22,6 +22,8 @@ class ExamPackSyncService
     /** @var list<string> */
     private const ALLOWED_EXTENSIONS = ['md', 'json', 'txt', 'csv'];
 
+    public function __construct(private ExamPracticeService $practice) {}
+
     public function syncSubjectZip(User $user, ExamSet $exam, ExamSubject $subject, UploadedFile $zip): ExamSync
     {
         if ($subject->exam_set_id !== $exam->id) {
@@ -198,6 +200,15 @@ class ExamPackSyncService
             ->limit(5)
             ->get(['id', 'original_name', 'bytes', 'status', 'files_indexed', 'message', 'synced_at', 'created_at']);
 
+        $practiceSets = [];
+        if ($dir && is_dir($dir)) {
+            try {
+                $practiceSets = $this->practice->listSets($user, $exam, $subject);
+            } catch (\Throwable) {
+                $practiceSets = [];
+            }
+        }
+
         return [
             'exam' => [
                 'id' => $exam->id,
@@ -218,6 +229,7 @@ class ExamPackSyncService
             'file_count' => $state?->file_count ?? 0,
             'progress' => $progress,
             'files' => $files,
+            'practice_sets' => $practiceSets,
             'recent_syncs' => $recentSyncs,
             'read_at' => now()->toIso8601String(),
         ];

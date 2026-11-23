@@ -6,6 +6,7 @@ use App\Http\Controllers\BidController;
 use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
 use App\Http\Controllers\ExamController;
+use App\Http\Controllers\ExamPracticeController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PortfolioController;
@@ -84,4 +85,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
     Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
     Route::delete('exams/{exam}/subjects/{subject}/pack', [ExamController::class, 'clearPack']);
+
+    Route::get('exams/{exam}/subjects/{subject}/practice/sets', [ExamPracticeController::class, 'sets']);
+    Route::get('exams/{exam}/subjects/{subject}/practice/performance', [ExamPracticeController::class, 'performance']);
+    Route::get('exams/{exam}/subjects/{subject}/practice/sets/{setKey}', [ExamPracticeController::class, 'showSet']);
+    Route::post('exams/{exam}/subjects/{subject}/practice/sets/{setKey}/submit', [ExamPracticeController::class, 'submit']);
 });
