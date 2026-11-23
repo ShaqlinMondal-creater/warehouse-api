@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
+use App\Http\Controllers\ExamContentImportController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\ExamPracticeController;
 use App\Http\Controllers\OverviewController;
@@ -85,6 +86,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exams/{exam}/subjects/{subject}', [ExamController::class, 'subject']);
     Route::post('exams/{exam}/subjects/{subject}/sync', [ExamController::class, 'sync']);
     Route::delete('exams/{exam}/subjects/{subject}/pack', [ExamController::class, 'clearPack']);
+
+    /** Separate content-bank import (disk pack → exam_content_*). Does not replace sync/practice. */
+    Route::post('exams/{exam}/subjects/{subject}/content/import', [ExamContentImportController::class, 'import']);
+    Route::get('exams/{exam}/subjects/{subject}/content/summary', [ExamContentImportController::class, 'summary']);
 
     Route::get('exams/{exam}/subjects/{subject}/practice/sets', [ExamPracticeController::class, 'sets']);
     Route::get('exams/{exam}/subjects/{subject}/practice/performance', [ExamPracticeController::class, 'performance']);
