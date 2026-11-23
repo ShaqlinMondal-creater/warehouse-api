@@ -52,10 +52,30 @@ class BidExtractController extends Controller
         foreach ($bids as $row) {
             $existing = $existingByName->get($row['project_name'] ?? '');
             $same = $existing ? $comparison->isSame($existing, $row) : false;
+
+            $savedMyRank = $existing?->my_rank;
+            $savedUpdatedRank = $existing?->updated_rank;
+            $effectiveRank = $savedUpdatedRank !== null && $savedUpdatedRank !== ''
+                ? (string) $savedUpdatedRank
+                : ($savedMyRank !== null && $savedMyRank !== '' ? (string) $savedMyRank : null);
+            $incomingRank = array_key_exists('my_rank', $row) && $row['my_rank'] !== ''
+                ? (string) $row['my_rank']
+                : null;
+            $willUpdateRank = $existing !== null
+                && $incomingRank !== null
+                && $effectiveRank !== null
+                && $incomingRank !== $effectiveRank;
+
             $enriched[] = array_merge($row, [
                 'already_exists' => $existing !== null,
                 'same_as_saved' => $same,
                 'suggested_save' => ! $same,
+                'saved_my_rank' => $savedMyRank !== null && $savedMyRank !== '' ? (string) $savedMyRank : null,
+                'saved_updated_rank' => $savedUpdatedRank !== null && $savedUpdatedRank !== ''
+                    ? (string) $savedUpdatedRank
+                    : null,
+                'saved_client_viewed' => $existing?->client_viewed,
+                'will_set_updated_rank' => $willUpdateRank,
             ]);
         }
 

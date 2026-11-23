@@ -39,9 +39,6 @@ final class BidImportService
             if ($existing) {
                 $payload = [
                     'total_bids' => $row['total_bids'] ?? null,
-                    'client_viewed' => array_key_exists('client_viewed', $row)
-                        ? (bool) $row['client_viewed']
-                        : false,
                     'average_bid' => $row['average_bid'] ?? null,
                     'average_bid_raw' => $row['average_bid_raw'] ?? null,
                     'my_bid' => $row['my_bid'] ?? null,
@@ -50,6 +47,11 @@ final class BidImportService
                     'source' => 'screenshot',
                     'last_synced_at' => now(),
                 ];
+
+                // Only overwrite viewed when the client explicitly sent it (do not wipe on sync).
+                if (array_key_exists('client_viewed', $row)) {
+                    $payload['client_viewed'] = (bool) $row['client_viewed'];
+                }
 
                 // Preserve original my_rank; store newer rank in updated_rank when it changes.
                 if ($incomingRank !== null) {
