@@ -8,6 +8,7 @@ use App\Http\Controllers\BidWorkspaceController;
 use App\Http\Controllers\ExamContentImportController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\ExamPracticeController;
+use App\Http\Controllers\GuestController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PortfolioController;
@@ -29,10 +30,22 @@ Route::post('/login', [AuthController::class, 'login']);
 /** Public portfolio for third-party sites (Vercel portfolio, etc.) */
 Route::get('/public/portfolio', [PublicPortfolioController::class, 'show']);
 
+/** Any signed-in account (owner or guest) */
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+});
+
+/** Owner side only — guest tokens get 403 here */
+Route::middleware(['auth:sanctum', 'not.guest'])->group(function () {
     Route::get('/overview', OverviewController::class);
+
+    /** Guest accounts (same users table, role = guest) */
+    Route::get('guests', [GuestController::class, 'index']);
+    Route::post('guests', [GuestController::class, 'store']);
+    Route::put('guests/{guest}', [GuestController::class, 'update'])->whereNumber('guest');
+    Route::patch('guests/{guest}', [GuestController::class, 'update'])->whereNumber('guest');
+    Route::delete('guests/{guest}', [GuestController::class, 'destroy'])->whereNumber('guest');
 
     Route::get('/portfolio', [PortfolioController::class, 'show']);
     Route::put('/portfolio', [PortfolioController::class, 'update']);

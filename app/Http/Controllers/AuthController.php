@@ -24,6 +24,20 @@ class AuthController extends Controller
             ]);
         }
 
+        // Keep each account type on its own login page (checked after the password).
+        $portal = $data['portal'] ?? 'owner';
+        $isGuest = $user->role === 'guest';
+        if ($portal === 'guest' && ! $isGuest) {
+            throw ValidationException::withMessages([
+                'email' => ['This is not a guest account. Use the main login page.'],
+            ]);
+        }
+        if ($portal !== 'guest' && $isGuest) {
+            throw ValidationException::withMessages([
+                'email' => ['Guest accounts must use the guest login page.'],
+            ]);
+        }
+
         $token = $user->createToken($data['device_name'] ?? 'warehouse-web')->plainTextToken;
 
         return response()->json([

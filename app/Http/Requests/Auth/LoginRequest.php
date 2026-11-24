@@ -20,6 +20,7 @@ class LoginRequest extends FormRequest
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:120'],
+            'portal' => ['nullable', 'in:owner,guest'],
         ];
     }
 }
