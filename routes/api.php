@@ -5,10 +5,14 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BidController;
 use App\Http\Controllers\BidExtractController;
 use App\Http\Controllers\BidWorkspaceController;
+use App\Http\Controllers\ExamApplicationController;
 use App\Http\Controllers\ExamContentImportController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\ExamPracticeController;
+use App\Http\Controllers\GuestAnalyticsController;
 use App\Http\Controllers\GuestController;
+use App\Http\Controllers\GuestExamController;
+use App\Http\Controllers\GuestProfileController;
 use App\Http\Controllers\OverviewController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PortfolioController;
@@ -36,6 +40,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
+/** Guest panel API — guest tokens only (owners get 403) */
+Route::middleware(['auth:sanctum', 'guest.only'])->prefix('guest')->group(function () {
+    Route::get('profile', [GuestProfileController::class, 'show']);
+    Route::put('profile', [GuestProfileController::class, 'update']);
+    Route::patch('profile', [GuestProfileController::class, 'update']);
+
+    Route::get('analytics', GuestAnalyticsController::class);
+
+    Route::get('exams', [GuestExamController::class, 'index']);
+    Route::post('exams/{exam}/apply', [GuestExamController::class, 'apply']);
+    // Everything below needs an approved application for {exam}
+    Route::get('exams/{exam}', [GuestExamController::class, 'show']);
+    Route::get('exams/{exam}/subjects/{subject}/content/summary', [GuestExamController::class, 'summary']);
+    Route::get('exams/{exam}/subjects/{subject}/content/notes', [GuestExamController::class, 'note']);
+    Route::get('exams/{exam}/subjects/{subject}/content/chapters/{code}', [GuestExamController::class, 'chapter']);
+    Route::get('exams/{exam}/subjects/{subject}/practice/sets', [GuestExamController::class, 'sets']);
+    Route::get('exams/{exam}/subjects/{subject}/practice/performance', [GuestExamController::class, 'performance']);
+    Route::get('exams/{exam}/subjects/{subject}/practice/sets/{setKey}', [GuestExamController::class, 'showSet']);
+    Route::post('exams/{exam}/subjects/{subject}/practice/sets/{setKey}/submit', [GuestExamController::class, 'submit']);
+});
+
 /** Owner side only — guest tokens get 403 here */
 Route::middleware(['auth:sanctum', 'not.guest'])->group(function () {
     Route::get('/overview', OverviewController::class);
@@ -46,6 +71,11 @@ Route::middleware(['auth:sanctum', 'not.guest'])->group(function () {
     Route::put('guests/{guest}', [GuestController::class, 'update'])->whereNumber('guest');
     Route::patch('guests/{guest}', [GuestController::class, 'update'])->whereNumber('guest');
     Route::delete('guests/{guest}', [GuestController::class, 'destroy'])->whereNumber('guest');
+
+    /** Guest exam applications — owner approves / rejects */
+    Route::get('exam-applications', [ExamApplicationController::class, 'index']);
+    Route::patch('exam-applications/{application}', [ExamApplicationController::class, 'update'])->whereNumber('application');
+    Route::delete('exam-applications/{application}', [ExamApplicationController::class, 'destroy'])->whereNumber('application');
 
     Route::get('/portfolio', [PortfolioController::class, 'show']);
     Route::put('/portfolio', [PortfolioController::class, 'update']);

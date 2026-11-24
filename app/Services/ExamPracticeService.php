@@ -79,8 +79,10 @@ class ExamPracticeService
         string $setKey,
         array $answers,
         ?string $startedAt = null,
+        ?User $packOwner = null,
     ): array {
-        $source = $this->resolveSource($user, $exam, $subject, $setKey);
+        // Attempts are saved for $user; the pack files may belong to another account (guest flow).
+        $source = $this->resolveSource($packOwner ?? $user, $exam, $subject, $setKey);
         $key = $source['key'];
         if ($source['answers_abs'] === null || ! is_file($source['answers_abs'])) {
             throw new RuntimeException('Answer key not found for this set.');

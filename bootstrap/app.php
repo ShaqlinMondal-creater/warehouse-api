@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         $middleware->alias([
             'not.guest' => \App\Http\Middleware\EnsureNotGuest::class,
+            'guest.only' => \App\Http\Middleware\EnsureGuest::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
