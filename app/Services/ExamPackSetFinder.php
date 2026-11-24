@@ -230,7 +230,8 @@ class ExamPackSetFinder
 
     private function chapterFromName(string $stem): ?string
     {
-        if (preg_match('/^(M\d{1,3})(?=[-_.]|$)/i', $stem, $m)) {
+        // Chapter prefixes such as M01 (math) or E01 (english).
+        if (preg_match('/^([A-Z]{1,2}\d{1,3})(?=[-_.]|$)/i', $stem, $m)) {
             return strtoupper($m[1]);
         }
 

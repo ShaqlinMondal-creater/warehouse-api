@@ -4,6 +4,9 @@ namespace App\Services;
 
 class ExamMcqSetParser
 {
+    /** Option marker: "(a)" or "a)" not glued to a word. */
+    private const OPTION_MARKER = '/(?<![A-Za-z0-9])\(?([a-dA-D])\)/u';
+
     /**
      * Parse DAY-*-Q.md into questions (no answers).
      *
@@ -155,7 +158,7 @@ class ExamMcqSetParser
             }
 
             $text = implode("\n", $block['lines']);
-            if (! preg_match('/\([a-dA-D]\)/u', $text, $first, PREG_OFFSET_CAPTURE)) {
+            if (! preg_match(self::OPTION_MARKER, $text, $first, PREG_OFFSET_CAPTURE)) {
                 continue;
             }
 
@@ -166,7 +169,7 @@ class ExamMcqSetParser
 
             $options = [];
             if (preg_match_all(
-                '/\(([a-dA-D])\)[ \t]*(.*?)(?=[ \t]*(?:-[ \t]*)?\([a-dA-D]\)|\R|\z)/u',
+                '/(?<![A-Za-z0-9])\(?([a-dA-D])\)[ \t]*(.*?)(?=[ \t]*(?:-[ \t]*)?(?<![A-Za-z0-9])\(?[a-dA-D]\)|\R|\z)/u',
                 $rest,
                 $om,
                 PREG_SET_ORDER,
@@ -216,7 +219,7 @@ class ExamMcqSetParser
                 continue;
             }
 
-            if (preg_match('/^(\d{1,3})\.\s*\*{0,2}\s*\(([a-dA-D])\)\s*\*{0,2}\s*(.*)$/u', $trimmed, $m)) {
+            if (preg_match('/^(\d{1,3})\.\s*\*{0,2}\s*\(?([a-dA-D])\)\s*\*{0,2}\s*(.*)$/u', $trimmed, $m)) {
                 $no = (int) $m[1];
                 if (! isset($map[$no])) {
                     $map[$no] = [
