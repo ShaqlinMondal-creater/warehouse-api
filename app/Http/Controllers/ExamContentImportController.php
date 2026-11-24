@@ -20,7 +20,8 @@ class ExamContentImportController extends Controller
     {
         try {
             [$set, $sub] = $this->resolve($exam, $subject);
-            $result = $this->import->importFromSyncedPack($request->user(), $set, $sub);
+            $replace = $request->boolean('replace');
+            $result = $this->import->importFromSyncedPack($request->user(), $set, $sub, $replace);
 
             return $this->safeJson([
                 'ok' => true,

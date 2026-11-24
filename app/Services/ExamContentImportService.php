@@ -9,6 +9,7 @@ use App\Models\ExamSet;
 use App\Models\ExamSubject;
 use App\Models\ExamSubjectState;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
 
@@ -23,24 +24,51 @@ class ExamContentImportService
     /**
      * @return array<string, mixed>
      */
-    public function importFromSyncedPack(User $user, ExamSet $exam, ExamSubject $subject): array
+    public function importFromSyncedPack(User $user, ExamSet $exam, ExamSubject $subject, bool $replace = false): array
     {
+        // Validate the pack first, so a missing pack never clears the bank.
         $dir = $this->packDir($user, $exam, $subject);
 
-        $stats = [
-            'chapters' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
-            'questions' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
-            'notes' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
-            'sets_scanned' => 0,
+        return DB::transaction(function () use ($user, $subject, $dir, $replace) {
+            $cleared = $replace ? $this->clearBank($user, $subject) : null;
+
+            $stats = [
+                'chapters' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
+                'questions' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
+                'notes' => ['inserted' => 0, 'updated' => 0, 'unchanged' => 0],
+                'sets_scanned' => 0,
+            ];
+
+            $this->importChapters($user, $subject, $dir, $stats);
+            $this->importNotes($user, $subject, $dir, $stats);
+            $this->importPracticeSets($user, $subject, $dir, $stats);
+
+            if ($cleared !== null) {
+                $stats['cleared'] = $cleared;
+            }
+            $stats['totals'] = $this->summaryCounts($user, $subject);
+
+            return $stats;
+        });
+    }
+
+    /**
+     * Removes this user's bank rows for one subject (chapters, questions, notes).
+     * Practice attempts are not touched.
+     *
+     * @return array{chapters:int,questions:int,notes:int}
+     */
+    private function clearBank(User $user, ExamSubject $subject): array
+    {
+        $scope = fn ($query) => $query
+            ->where('user_id', $user->id)
+            ->where('exam_subject_id', $subject->id);
+
+        return [
+            'questions' => $scope(ExamContentQuestion::query())->delete(),
+            'notes' => $scope(ExamContentNote::query())->delete(),
+            'chapters' => $scope(ExamContentChapter::query())->delete(),
         ];
-
-        $this->importChapters($user, $subject, $dir, $stats);
-        $this->importNotes($user, $subject, $dir, $stats);
-        $this->importPracticeSets($user, $subject, $dir, $stats);
-
-        $stats['totals'] = $this->summaryCounts($user, $subject);
-
-        return $stats;
     }
 
     /**
