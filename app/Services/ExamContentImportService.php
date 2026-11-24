@@ -18,7 +18,7 @@ use RuntimeException;
  */
 class ExamContentImportService
 {
-    public function __construct(private ExamMcqSetParser $parser) {}
+    public function __construct(private ExamPackSetFinder $setFinder) {}
 
     /**
      * @return array<string, mixed>
@@ -249,32 +249,22 @@ class ExamContentImportService
      */
     private function importPracticeSets(User $user, ExamSubject $subject, string $dir, array &$stats): void
     {
-        $setsDir = $dir.DIRECTORY_SEPARATOR.'practice'.DIRECTORY_SEPARATOR.'sets';
-        if (! is_dir($setsDir)) {
-            return;
-        }
-
-        foreach (File::files($setsDir) as $file) {
-            $name = $file->getFilename();
-            if (! preg_match('/^(DAY-\d+)-Q\.md$/i', $name, $m)) {
-                continue;
-            }
-
-            $setKey = strtoupper($m[1]);
+        foreach ($this->setFinder->list($dir) as $source) {
             $stats['sets_scanned']++;
-            $qPath = $file->getPathname();
-            $aName = $setKey.'-ANSWERS.md';
-            $aPath = $setsDir.DIRECTORY_SEPARATOR.$aName;
-            $qRel = 'practice/sets/'.$name;
-            $aRel = is_file($aPath) ? 'practice/sets/'.$aName : null;
 
-            $questions = $this->parser->parseQuestions($this->readUtf8File($qPath));
-            $answers = is_file($aPath)
-                ? $this->parser->parseAnswers($this->readUtf8File($aPath))
-                : [];
+            $setKey = $source['key'];
+            $qRel = $source['questions_rel'];
+            $aRel = $source['answers_rel'];
+
+            $parsed = $this->setFinder->parse($source);
+            $questions = $parsed['questions'];
+            $answers = $parsed['answers'];
 
             foreach ($questions as $q) {
-                $externalId = $this->utf8(trim((string) $q['id']));
+                // GS sets keep their own question ids; numbered (math) files use set#no.
+                $externalId = $source['kind'] === 'day'
+                    ? $this->utf8(trim((string) $q['id']))
+                    : $this->utf8($setKey.'#'.(int) $q['no']);
                 if ($externalId === '') {
                     continue;
                 }

@@ -12,7 +12,10 @@ use RuntimeException;
 
 class ExamPracticeService
 {
-    public function __construct(private ExamMcqSetParser $parser) {}
+    public function __construct(
+        private ExamMcqSetParser $parser,
+        private ExamPackSetFinder $finder,
+    ) {}
 
     /**
      * @return list<array{key:string,label:string,questions_file:string,answers_file:string|null,question_count:int|null}>
@@ -20,37 +23,24 @@ class ExamPracticeService
     public function listSets(User $user, ExamSet $exam, ExamSubject $subject): array
     {
         $dir = $this->packDir($user, $exam, $subject);
-        $setsDir = $dir.DIRECTORY_SEPARATOR.'practice'.DIRECTORY_SEPARATOR.'sets';
-        if (! is_dir($setsDir)) {
-            return [];
-        }
 
         $out = [];
-        foreach (File::files($setsDir) as $file) {
-            $name = $file->getFilename();
-            if (! preg_match('/^(DAY-\d+)-Q\.md$/i', $name, $m)) {
-                continue;
-            }
-            $key = strtoupper($m[1]);
-            $answersName = $key.'-ANSWERS.md';
-            $answersPath = $setsDir.DIRECTORY_SEPARATOR.$answersName;
+        foreach ($this->finder->list($dir) as $source) {
             $count = null;
             try {
-                $count = count($this->parser->parseQuestions((string) file_get_contents($file->getPathname())));
+                $count = count($this->finder->parse($source)['questions']);
             } catch (\Throwable) {
                 $count = null;
             }
 
             $out[] = [
-                'key' => $key,
-                'label' => $key,
-                'questions_file' => 'practice/sets/'.$name,
-                'answers_file' => is_file($answersPath) ? 'practice/sets/'.$answersName : null,
+                'key' => $source['key'],
+                'label' => $source['label'],
+                'questions_file' => $source['questions_rel'],
+                'answers_file' => $source['answers_rel'],
                 'question_count' => $count,
             ];
         }
-
-        usort($out, fn ($a, $b) => strcmp($a['key'], $b['key']));
 
         return $out;
     }
@@ -60,8 +50,8 @@ class ExamPracticeService
      */
     public function getSet(User $user, ExamSet $exam, ExamSubject $subject, string $setKey): array
     {
-        [$qPath, $aPath, $key] = $this->resolveSetPaths($user, $exam, $subject, $setKey);
-        $questions = $this->parser->parseQuestions((string) file_get_contents($qPath));
+        $source = $this->resolveSource($user, $exam, $subject, $setKey);
+        $questions = $this->finder->parse($source)['questions'];
         if ($questions === []) {
             throw new RuntimeException('No questions parsed from this set.');
         }
@@ -69,9 +59,9 @@ class ExamPracticeService
         $progress = $this->readProgress($this->packDir($user, $exam, $subject));
 
         return [
-            'set_key' => $key,
-            'questions_file' => 'practice/sets/'.basename($qPath),
-            'has_answers' => is_file($aPath),
+            'set_key' => $source['key'],
+            'questions_file' => $source['questions_rel'],
+            'has_answers' => $source['answers_abs'] !== null && is_file($source['answers_abs']),
             'total' => count($questions),
             'current_from_progress' => $progress['currentSet'] ?? null,
             'questions' => $questions,
@@ -90,13 +80,15 @@ class ExamPracticeService
         array $answers,
         ?string $startedAt = null,
     ): array {
-        [$qPath, $aPath, $key] = $this->resolveSetPaths($user, $exam, $subject, $setKey);
-        if (! is_file($aPath)) {
+        $source = $this->resolveSource($user, $exam, $subject, $setKey);
+        $key = $source['key'];
+        if ($source['answers_abs'] === null || ! is_file($source['answers_abs'])) {
             throw new RuntimeException('Answer key not found for this set.');
         }
 
-        $questions = $this->parser->parseQuestions((string) file_get_contents($qPath));
-        $answerMap = $this->parser->parseAnswers((string) file_get_contents($aPath));
+        $parsed = $this->finder->parse($source);
+        $questions = $parsed['questions'];
+        $answerMap = $parsed['answers'];
 
         $normalized = [];
         foreach ($answers as $no => $opt) {
@@ -147,7 +139,7 @@ class ExamPracticeService
             'user_id' => $user->id,
             'exam_subject_id' => $subject->id,
             'set_key' => $key,
-            'questions_file' => 'practice/sets/'.basename($qPath),
+            'questions_file' => $source['questions_rel'],
             'total' => $total,
             'answered' => $answered,
             'correct' => $correct,
@@ -380,25 +372,23 @@ class ExamPracticeService
     }
 
     /**
-     * @return array{0:string,1:string,2:string}
+     * @return array{key:string,label:string,kind:string,questions_abs:string,answers_abs:string|null,questions_rel:string,answers_rel:string|null,chapter:string|null}
      */
-    private function resolveSetPaths(User $user, ExamSet $exam, ExamSubject $subject, string $setKey): array
+    private function resolveSource(User $user, ExamSet $exam, ExamSubject $subject, string $setKey): array
     {
-        $key = strtoupper(trim($setKey));
-        if (! preg_match('/^DAY-\d+$/', $key)) {
+        $key = trim($setKey);
+        if (! preg_match('/^[A-Za-z0-9_-]{1,80}$/', $key)) {
             throw new RuntimeException('Invalid practice set key.');
         }
 
         $dir = $this->packDir($user, $exam, $subject);
-        $setsDir = $dir.DIRECTORY_SEPARATOR.'practice'.DIRECTORY_SEPARATOR.'sets';
-        $qPath = $setsDir.DIRECTORY_SEPARATOR.$key.'-Q.md';
-        $aPath = $setsDir.DIRECTORY_SEPARATOR.$key.'-ANSWERS.md';
+        $source = $this->finder->find($dir, $key);
 
-        if (! is_file($qPath)) {
+        if ($source === null) {
             throw new RuntimeException("Questions file not found for {$key}.");
         }
 
-        return [$qPath, $aPath, $key];
+        return $source;
     }
 
     private function packDir(User $user, ExamSet $exam, ExamSubject $subject): string
