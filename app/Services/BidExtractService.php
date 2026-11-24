@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AiModel;
+use App\Support\BidPlacedTimeParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -70,7 +71,7 @@ Each object keys:
 - client_viewed — always false (do not try to detect viewed from icons)
 - average_bid_raw (string or null) — Average Bid cell if present
 - my_bid_raw (string or null) — "My Bid" OR "Your Bid" cell exactly as shown (e.g. "₹20,000.00 INR")
-- bid_placed_raw (string or null) — "Bid Placed" relative time OR "Time to bid" text if that is what the table shows
+- bid_placed_raw (string or null) — the "Bid Placed" column text only, exactly as shown (e.g. "2 days ago", "Nov 23, 06:06 PM"). Never use "Time to bid" or countdown text like "2 days left"; use null for those
 - bid_rank_raw (string or null) — full Bid Rank text e.g. "#96 of 111 bids"
 - bid_type (string or null) — "hourly" if my/your bid contains "/ hour", else "fixed"
 
@@ -78,7 +79,7 @@ Rules:
 - One object per visible project row.
 - Keep currency symbols/text in *_raw fields.
 - Missing cells → null.
-- Support both table styles: (1) Project / Total Bids / Average Bid / My Bid / Bid Placed (2) Project / Time to bid / Bid Rank / Your Bid / Actions Taken.
+- Support both table styles: (1) Project / Total Bids / Average Bid / My Bid / Bid Placed (2) Project / Time to bid / Bid Rank / Your Bid / Actions Taken (here bid_placed_raw is null because "Time to bid" is not a placed time).
 PROMPT;
     }
 
@@ -442,7 +443,11 @@ PROMPT;
                     ?? $this->detectBidType($myRaw)
                     ?? $this->detectBidType($avgRaw),
                 'bid_placed_raw' => $placedRaw,
-                'bid_placed_at' => $this->parseRelativeTime($placedRaw),
+                'bid_placed_at' => BidPlacedTimeParser::parse(
+                    $placedRaw,
+                    now(),
+                    (string) config('bids.screenshot_timezone', 'Asia/Kolkata'),
+                ),
                 'bid_rank_raw' => $rankRaw,
             ];
         }
@@ -567,29 +572,4 @@ PROMPT;
         return str_contains(strtolower($raw), 'hour') ? 'hourly' : 'fixed';
     }
 
-    private function parseRelativeTime(?string $raw): ?string
-    {
-        if ($raw === null) {
-            return null;
-        }
-
-        $text = strtolower(trim($raw));
-        $text = preg_replace('/^about\s+/', '', $text) ?? $text;
-        $now = now();
-
-        if (preg_match('/(\d+)\s*minute/', $text, $m)) {
-            return $now->copy()->subMinutes((int) $m[1])->toIso8601String();
-        }
-        if (preg_match('/(\d+)\s*hour/', $text, $m)) {
-            return $now->copy()->subHours((int) $m[1])->toIso8601String();
-        }
-        if (preg_match('/(\d+)\s*day/', $text, $m)) {
-            return $now->copy()->subDays((int) $m[1])->toIso8601String();
-        }
-        if (str_contains($text, 'yesterday')) {
-            return $now->copy()->subDay()->toIso8601String();
-        }
-
-        return null;
-    }
 }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Bid;
 use App\Models\BidWorkspace;
+use App\Support\BidName;
 
 final class BidImportService
 {
@@ -20,13 +21,16 @@ final class BidImportService
         $skipped = 0;
         $saved = [];
 
+        $candidates = Bid::query()
+            ->where('bid_workspace_id', $workspace->id)
+            ->get();
+
         foreach ($rows as $row) {
-            $existing = Bid::query()
-                ->where('bid_workspace_id', $workspace->id)
-                ->where('project_name', $row['project_name'])
-                ->first();
+            $incomingName = (string) $row['project_name'];
+            $existing = BidName::match($incomingName, $candidates);
 
             if ($existing && $this->comparison->isSame($existing, $row)) {
+                $this->repairTruncatedName($existing, $incomingName);
                 $skipped++;
                 $saved[] = $existing;
 
@@ -66,12 +70,15 @@ final class BidImportService
                     }
                 }
 
-                // Only refresh bid_placed_at / status when provided and useful
+                // Only fill bid_placed_at when it is missing (a rescan does not overwrite a saved date).
                 if (! empty($row['bid_placed_at']) && ! $existing->bid_placed_at) {
                     $payload['bid_placed_at'] = $row['bid_placed_at'];
                 }
                 if (! empty($row['status'])) {
                     $payload['status'] = $row['status'];
+                }
+                if ($this->shouldRepairName($existing, $incomingName)) {
+                    $payload['project_name'] = $incomingName;
                 }
 
                 $existing->update($payload);
@@ -80,7 +87,7 @@ final class BidImportService
             } else {
                 $bid = Bid::query()->create([
                     'bid_workspace_id' => $workspace->id,
-                    'project_name' => $row['project_name'],
+                    'project_name' => $incomingName,
                     'total_bids' => $row['total_bids'] ?? null,
                     'my_rank' => $incomingRank,
                     'updated_rank' => null,
@@ -98,6 +105,9 @@ final class BidImportService
                     'last_synced_at' => now(),
                 ]);
                 $added++;
+
+                // Later rows in this batch can match this new bid instead of creating a copy.
+                $candidates->push($bid);
             }
 
             $saved[] = $bid;
@@ -109,5 +119,19 @@ final class BidImportService
             'skipped' => $skipped,
             'data' => $saved,
         ];
+    }
+
+    /** A saved name cut off with "..." is replaced by the full name once a screenshot shows it. */
+    private function shouldRepairName(Bid $existing, string $incomingName): bool
+    {
+        return BidName::isTruncated((string) $existing->project_name)
+            && ! BidName::isTruncated($incomingName);
+    }
+
+    private function repairTruncatedName(Bid $existing, string $incomingName): void
+    {
+        if ($this->shouldRepairName($existing, $incomingName)) {
+            $existing->update(['project_name' => $incomingName]);
+        }
     }
 }

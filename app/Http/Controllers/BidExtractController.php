@@ -11,6 +11,7 @@ use App\Models\BidWorkspace;
 use App\Services\BidComparison;
 use App\Services\BidExtractService;
 use App\Services\BidImportService;
+use App\Support\BidName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -42,15 +43,13 @@ class BidExtractController extends Controller
             ], 422);
         }
 
-        $existingByName = Bid::query()
+        $candidates = Bid::query()
             ->where('bid_workspace_id', $bidWorkspace->id)
-            ->whereIn('project_name', collect($bids)->pluck('project_name')->filter()->all())
-            ->get()
-            ->keyBy('project_name');
+            ->get();
 
         $enriched = [];
         foreach ($bids as $row) {
-            $existing = $existingByName->get($row['project_name'] ?? '');
+            $existing = BidName::match((string) ($row['project_name'] ?? ''), $candidates);
             $same = $existing ? $comparison->isSame($existing, $row) : false;
 
             $savedMyRank = $existing?->my_rank;
